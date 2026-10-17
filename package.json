@@ -1,0 +1,13 @@
+{
+  "name": "usagelet",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "无需安装依赖的单文件 Agent 用量统计脚本",
+  "engines": { "node": ">=22.16.0" },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "check": "node --check usagelet.mjs"
+  },
+  "license": "MIT"
+}
