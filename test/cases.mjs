@@ -302,6 +302,9 @@ export const CASES = [
   { name: 'zcode-total-output-fallback', db: 'fallback' },
   { name: 'zcode-total-extra', db: 'extra' },
   { name: 'zcode-numeric-normalization', db: 'numbers' },
+  // 新装或结构变化：ZCode 库被跳过，其他来源照常统计。
+  { name: 'zcode-missing-table-keeps-claude', files: cp([claude()]), db: 'no-model-usage' },
+  { name: 'zcode-missing-column-keeps-claude', files: cp([claude()]), db: 'no-status' },
   {
     name: 'mixed-agents-and-alias',
     env: {
@@ -395,6 +398,25 @@ export async function populate(root, c) {
     db.exec(
       "CREATE TABLE session (id TEXT PRIMARY KEY,directory TEXT); INSERT INTO session VALUES ('s','/project')",
     );
+    if (c.db === 'no-model-usage') {
+      db.close();
+      return;
+    }
+    if (c.db === 'no-status') {
+      db.exec(
+        'CREATE TABLE model_usage (id TEXT,session_id TEXT,started_at INTEGER,model_id TEXT,input_tokens INTEGER,output_tokens INTEGER)',
+      );
+      db.prepare('INSERT INTO model_usage VALUES (?,?,?,?,?,?)').run(
+        'u',
+        's',
+        Date.parse(TIME),
+        'zmodel',
+        100,
+        20,
+      );
+      db.close();
+      return;
+    }
     const legacy = c.db === 'legacy';
     db.exec(
       `CREATE TABLE model_usage (id TEXT,session_id TEXT,started_at INTEGER,model_id TEXT,status TEXT,input_tokens INTEGER,output_tokens INTEGER,cache_read_input_tokens INTEGER${legacy ? '' : ',cache_creation_input_tokens INTEGER,computed_total_tokens INTEGER'})`,

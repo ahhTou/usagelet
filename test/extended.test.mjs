@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { zstdCompressSync } from 'node:zlib';
-import { collect, aggregate } from '../src/index.mjs';
+import { collect, aggregate, VERSION } from '../src/index.mjs';
 const script = fileURLToPath(new URL('../dist/usagelet.mjs', import.meta.url));
 async function fixture(t) {
   const home = await mkdtemp(join(tmpdir(), 'usagelet-test-'));
@@ -257,7 +257,7 @@ test('单个文件在干净目录运行，无 package.json 或 node_modules', as
       encoding: 'utf8',
     }),
   );
-  assert.equal(result.metadata.version, '0.2.0');
+  assert.equal(result.metadata.version, VERSION);
   assert.equal(result.daily.length, 0);
   assert.equal(spawnSync(process.execPath, [target, '--since', '2026-02-30']).status, 1);
 });

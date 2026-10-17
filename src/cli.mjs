@@ -16,18 +16,6 @@ const HELP = `usagelet ${VERSION} · 本机 Agent 用量统计（Node.js >= 22.1
 Qoder 暂缓接入。只读取日志与用量表，不读取凭据、不上传任何数据。
 JSON 中缺失的计数为 null，并附 knownTokens / missingFields。
 退出码：0 完整统计；2 存在数据质量警告；1 无法完成采集。`;
-function dateOption(value) {
-  value = /^\d{8}$/.test(value)
-    ? `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`
-    : value;
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
-    !Number.isFinite(Date.parse(value)) ||
-    new Date(value).toISOString().slice(0, 10) !== value
-  )
-    throw new Error(`无效日期 ${value}`);
-  return value;
-}
 export async function main(args = process.argv.slice(2)) {
   const options = { sources: {} };
   let json = false;
@@ -58,13 +46,23 @@ export async function main(args = process.argv.slice(2)) {
     const value = args[++i];
     if (!value || value.startsWith('--')) throw new Error(`${arg} 缺少值`);
     if (arg === '--mode') options.mode = value;
-    if (arg === '--agent') options.agents = [...new Set(value.split(','))];
+    if (arg === '--agent') {
+      options.agents = [
+        ...new Set(
+          value
+            .split(',')
+            .map((x) => x.trim())
+            .filter(Boolean),
+        ),
+      ];
+      if (!options.agents.length) throw new Error('--agent 缺少值');
+    }
     if (arg === '--tz') {
       new Intl.DateTimeFormat('en', { timeZone: value });
       options.timezone = value;
     }
-    if (arg === '--since') options.since = dateOption(value);
-    if (arg === '--until') options.until = dateOption(value);
+    if (arg === '--since') options.since = value;
+    if (arg === '--until') options.until = value;
     if (arg === '--source') {
       const at = value.indexOf('='),
         agent = value.slice(0, at);
@@ -73,8 +71,6 @@ export async function main(args = process.argv.slice(2)) {
       (options.sources[agent] ??= []).push(resolve(value.slice(at + 1)));
     }
   }
-  if (options.since && options.until && options.since > options.until)
-    throw new Error('--since 不能晚于 --until');
   const result = await collect(options);
   if (json) console.log(JSON.stringify(result, null, 2));
   else {

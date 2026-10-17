@@ -1,6 +1,6 @@
 {
   "name": "usagelet",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "private": true,
   "type": "module",
   "description": "模块化开发、单文件分发的 Agent 用量统计工具",

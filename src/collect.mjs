@@ -1,4 +1,4 @@
-import { realpath } from 'node:fs/promises';
+import { realpath, stat } from 'node:fs/promises';
 import { join, basename, relative, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { exists, walk } from './io.mjs';
@@ -17,6 +17,20 @@ const list = (raw) =>
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean);
+// 接受 YYYY-MM-DD 或 YYYYMMDD，统一成 YYYY-MM-DD；与 ccusage 的 --since / --until 写法一致。
+function dateOption(name, value) {
+  if (value === undefined || value === null) return undefined;
+  const raw = value;
+  if (typeof value === 'string' && /^\d{8}$/.test(value))
+    value = `${value.slice(0, 4)}-${value.slice(4, 6)}-${value.slice(6, 8)}`;
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value) ||
+    new Date(`${value}T00:00:00Z`).toISOString().slice(0, 10) !== value
+  )
+    throw Error(`${name} 无效日期 ${raw}，应为 YYYY-MM-DD 或 YYYYMMDD`);
+  return value;
+}
 export async function collect(options = {}) {
   const [major, minor] = process.versions.node.split('.').map(Number);
   if (major < 22 || (major === 22 && minor < 16)) throw Error('usagelet 需要 Node.js >= 22.16');
@@ -25,6 +39,9 @@ export async function collect(options = {}) {
   const env = options.env ?? process.env,
     home = options.home ?? homedir();
   const timezone = options.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const since = dateOption('since', options.since),
+    until = dateOption('until', options.until);
+  if (since && until && since > until) throw Error('since 不能晚于 until');
   const ctx = {
     compat: mode === 'ccusage',
     issues: new Map(),
@@ -69,6 +86,14 @@ export async function collect(options = {}) {
         if (explicit) throw Error(`指定的 ${agent} 数据源不存在：${path}`);
         continue;
       }
+      // 上游只接受文件形式的 ZCode 数据库；默认位置不是文件时同样视为未找到。
+      if (agent === 'zcode' && !(await stat(path)).isFile()) {
+        if (explicit)
+          throw Error(
+            `指定的 zcode 数据源不是文件：${path}；--source zcode= 需要指向 SQLite 数据库文件，通常是 ~/.zcode/cli/db/db.sqlite`,
+          );
+        continue;
+      }
       found.push(await realpath(path));
     }
     for (const path of [...new Set(found)]) {
@@ -107,13 +132,15 @@ export async function collect(options = {}) {
     });
   }
   const warnings = [...ctx.issues.values()],
-    data = aggregate(rows, { ...options, timezone });
+    data = aggregate(rows, { ...options, timezone, since, until });
   return {
     metadata: {
       tool: 'usagelet',
       version: VERSION,
       mode,
-      compatibility: mode === 'ccusage' ? COMPAT : null,
+      // 契约只覆盖 Claude Code、Codex、ZCode；选了 DeepSeek 等契约外来源时不再标注对齐。
+      compatibility:
+        mode === 'ccusage' && selected.every((a) => BASE_AGENTS.includes(a)) ? COMPAT : null,
       timezone,
       complete: !warnings.length && !data.totals.missingFields.length,
       compressedLogs: mode === 'extended' && !options.noCompressed,

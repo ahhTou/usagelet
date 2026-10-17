@@ -1,4 +1,4 @@
-export const VERSION = '0.2.0';
+export const VERSION = '0.2.1';
 export const AGENTS = ['claude', 'codex', 'zcode', 'deepseek'];
 export const BUCKETS = ['inputTokens', 'outputTokens', 'cacheCreationTokens', 'cacheReadTokens'];
 export const ZERO = () => Object.fromEntries(BUCKETS.map((k) => [k, 0]));
