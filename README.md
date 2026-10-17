@@ -1,80 +1,93 @@
 # usagelet
 
-> 开发中 · 2026-10-18 · v0.1.0 首版采集器
+> 开发中 · 2026-10-18 · v0.2.0
 
-参考 [ccusage](https://github.com/ccusage/ccusage)，以 JavaScript 实现本机 Agent 用量采集、去重和按日汇总。交付物就是源码文件 `usagelet.mjs`：下载后用 Node.js 运行，无需 npm install、编译、打包或平台专用二进制。
+参考 [ccusage](https://github.com/ccusage/ccusage) 的本机 Agent 用量统计工具。源码按模块维护，开发时打包为单个 `usagelet.mjs`；使用端无需安装 npm 包或构建工具。
 
-**运行要求：Node.js >= 22.16，且包含内置 Zstd / SQLite 支持。当前只在 macOS arm64、Node.js 22.23.2 验证；其他环境未测试。** Node 22 的 SQLite 可能输出实验性提示，不影响 JSON stdout。
+**需要 Node.js >= 22.16，包含内置 SQLite / Zstd 支持。目前仅在 macOS arm64、Node.js 22.23.2 验证，其他环境未测试。** Node 22 的 SQLite 可能在 stderr 显示实验性提示。
 
-## 下载运行
+## 下载与运行
 
 ```bash
-curl -fL https://ahhtou.wang/dl/usagelet-0.1.0.mjs -o usagelet.mjs
-curl -fL https://ahhtou.wang/dl/usagelet-0.1.0.mjs.sha256 -o usagelet-0.1.0.mjs.sha256
-shasum -a 256 -c usagelet-0.1.0.mjs.sha256
+curl -fL https://ahhtou.wang/dl/usagelet-0.2.0.mjs -o usagelet.mjs
+curl -fL https://ahhtou.wang/dl/usagelet-0.2.0.mjs.sha256 -o usagelet.mjs.sha256
+shasum -a 256 -c usagelet.mjs.sha256
 node usagelet.mjs daily
-node usagelet.mjs daily --json > usage.json
+node usagelet.mjs daily --json --tz Asia/Shanghai > usage.json
 ```
 
-校验清单中的文件名是 `usagelet.mjs`。也可以直接从此仓库取得源码运行。脚本只离线读取会话日志和用量表，不读取账号凭据，不上传对话或统计，不联网获取定价。
+脚本仅离线读取会话日志及用量表，不读取账号凭据、不上传数据、不请求定价。
 
-## 支持情况
+## 默认口径：对齐 ccusage 20.0.21
 
-以下是 Agent 工具 / 数据来源，内部模型标识原样保留。
+默认 `--mode ccusage`，扫描 **Claude Code、Codex、ZCode**。兼容基线固定为 ccusage **20.0.21**（源码 tag 对应提交 `3c5556a775ebcf1e59844d4283c8c5b30529c290`）。
 
-| 来源 | 默认位置 | 当前状态 |
+本次对齐范围是 `daily --json --by-agent -O` 的**日期、Agent、模型分组，输入 / 输出 / 缓存写入 / 缓存读取四项 token，以及日、Agent、全局总 token**。JSON 的附加诊断、字段顺序、终端样式与 ccusage 不必相同。首版不实现费用估算；`cost` 为 `null`，不能当作费用兼容版。
+
+| 来源 | 默认读取位置 | 已迁移的关键规则 |
 |---|---|---|
-| Claude Code | `~/.claude/projects`、`~/.config/claude/projects` | 已实现；本机真实数据对账通过 |
-| Codex | `~/.codex/sessions`、`~/.codex/archived_sessions` | 已实现普通 JSONL、`.jsonl.zst`、累计差分及 compaction 用量 |
-| ZCode | `~/.zcode/cli/db/db.sqlite` | 已实现只读 SQLite；本机真实数据对账通过 |
-| DeepSeek Harness | `~/.dsh/sessions` | 已实现 v0–v4 JSONL / `.jsonl.zstd`、拼接 Zstd 帧；本机 v4 数据已验证，早期格式仅兼容已知字段，未逐版本实机测试 |
-| Qoder | — | 按用户要求暂缓接入 |
+| Claude Code | `~/.claude/projects`、`~/.config/claude/projects` | 会话隔离、完整快照选择、侧链重放、AgentProgress、advisor、TTL 缓存桶、缺省值、fast 模型名 |
+| Codex | `~/.codex/sessions`、`archived_sessions` | 累计差分、跨文件事件去重、活动文件优先、分支前缀 / 截止时间 / 重写时间突发处理、headless 格式、模型回退 |
+| ZCode | `~/.zcode/cli/db/db.sqlite` | 只读 SQLite、已完成请求、旧表结构、缓存拆分、用量 id 去重、计数转换、总量补差 |
 
-支持 `CLAUDE_CONFIG_DIR`（逗号分隔多个目录）、`XDG_CONFIG_HOME`、`CODEX_HOME`、`ZCODE_HOME`、`DSH_HOME`。环境变量指向工具主目录；`--source` 直接指向日志目录、单个日志文件，或 ZCode 数据库文件。
+与上游保持相同默认规则：
+
+- **默认时区为系统时区**，建议同步到站点时明确传 `--tz Asia/Shanghai`。
+- 支持 `CCUSAGE_MODEL_ALIASES` 的 JSON 或 `a=b,c=d` 写法；Codex 的 `codex-auto-review` 按基线版本内置发布日期表映射，缺模型时回退到 `gpt-5`。这些是上游兼容规则，非 usagelet 自行猜测。
+- ccusage 20.0.21 不读 Codex 压缩归档，也不单独增加 compaction 请求；默认模式保持相同范围。
+- Claude 未报告的可选缓存桶、ZCode 旧结构缺少的缓存列，按上游语义补零。不能用 v0.1.0 的缺失值规则替换默认兼容语义。
+- ZCode 的 `computed_total_tokens` 可能大于四项和；输出缺失时补输出，否则保留 `extraTotalTokens`，总量不能简单强制等于四项和。Codex 的记录总量同样按上游保留。
+
+## 扩展模式与 DeepSeek
 
 ```bash
-node usagelet.mjs --agent claude,codex --tz Asia/Shanghai --since 2026-10-01 --until 2026-10-18
-node usagelet.mjs --agent deepseek --source deepseek=/path/to/sessions --json
+node usagelet.mjs daily --mode extended --json --tz Asia/Shanghai
+node usagelet.mjs daily --agent deepseek --json --tz Asia/Shanghai
+```
+
+`--mode extended` 保留 v0.1 的四来源采集，额外读取 Codex `.jsonl.zst` 和独立 compaction 用量，保留原始模型标识；**它不声明与 ccusage 20.0.21 等价**。默认兼容模式的判断和对账不依赖排除这些差异。
+
+DeepSeek Harness 默认读取 `~/.dsh/sessions`，支持 JSONL / 拼接帧 `.jsonl.zstd`；本机 v4 已验证，历史 v0–v3 未逐版本实机验证。带种子历史的会话报告不完整。Qoder 按用户要求暂缓。
+
+## 参数与输出
+
+```bash
+node usagelet.mjs --agent claude,codex --since 2026-10-01 --until 2026-10-18 --tz Asia/Shanghai --json
 node usagelet.mjs --agent zcode --source zcode=/path/to/db.sqlite --json
+node usagelet.mjs --agent deepseek --source deepseek=/path/to/sessions --json
 node usagelet.mjs --help
 ```
 
-`--source` 可重复指定以合并多个路径。`--agent` 是选择范围，默认扫描四个已实现的来源。起止日期均包含边界，默认按 `Asia/Shanghai` 切日。为了正确求累计差分，日期过滤在解析和去重之后执行。
+`--source 来源=路径` 可以重复传入，直接指定日志目录 / 文件或 ZCode 数据库。支持 `CLAUDE_CONFIG_DIR`、`XDG_CONFIG_HOME`、`CODEX_HOME`、`ZCODE_HOME`、`DSH_HOME`；前三种工具主目录环境变量支持逗号分隔多个目录。起止日期包含边界，也接受 `YYYYMMDD`。过滤在累计基线与去重之后执行。
 
-## 输出与统计口径
+JSON 保留 `daily[].agents[].modelBreakdowns[]`，并提供各级总计。`metadata.compatibility` 明确基线，`metadata.mode` 明确模式。`metadata.complete`、`warnings` 和来源状态用于诊断；异常记录可能与上游一样被跳过，但 usagelet 会额外提示已发现的 JSON 问题。扩展模式未报告的字段保留 `null`，另附 `knownTokens` / `missingFields`。
 
-JSON 的主结构为：
+退出码：`0` 正常，`2` 数据质量警告，`1` 参数、读取或不支持的数据错误。诊断写 stderr，JSON 写 stdout。只保证 JS 安全整数范围内的精确计数，聚合溢出会拒绝。
 
-- `metadata`：版本、时区、来源状态、完整性标记和数据质量警告。
-- `daily[].agents[].modelBreakdowns[]`：按日期、Agent、原始模型汇总的四项 token。
-- `totals`：相同口径的总计。
-
-四项为 `inputTokens`（不含缓存的输入）、`outputTokens`、`cacheCreationTokens`、`cacheReadTokens`，互不重叠。推理 token 已包含在输出中，不再重复加一次。未报告的字段返回 `null`，`knownTokens` 提供已知部分，`missingFields` 明确缺什么。`totalTokens` 仅在四项完整时给出；首版不估算价格，`cost` 为 `null`。
-
-来源状态区分 `ok`、`not_found` 与 `no_usage`。`metadata.complete` 只表示本次读取范围内没有已识别的数据质量问题，不保证工具尚未记录或已删除的历史也完整。不存在的默认来源可以正常跳过；明确指定的路径不存在、数据库结构不匹配、未知日志版本、损坏压缩文件会失败。
-
-退出码：`0` 正常完成，`2` 有缺失字段或数据质量警告，`1` 参数、读取或格式错误。诊断写 stderr，JSON 写 stdout。上传前必须检查退出码与 `metadata.complete`，不能只看输出中是否有 `daily`。
-
-### 去重与已知边界
-
-- Claude：按会话、message.id、requestId 去重，保留完整且总量更大的快照，优先主线而非侧链重放；advisor 迭代单独按原模型统计。缓存写入优先取详细 TTL 桶之和，与 ccusage 20.0.21 对齐。
-- Codex：相同累计快照不重复计数，缺少单次计数时按累计差分；同一会话的普通 / 压缩副本合并。分支与已找到父会话的用量前缀匹配，缺父会话时标记不完整；尚未实现 ccusage 对时间被重写的分支前缀的启发式推断。单独的 compaction 请求只在有对应标记、且未被累计记录覆盖时计入。
-- ZCode：仅统计 `completed` 请求，按用量 id 去重；input 中包含的缓存拆开存储。本地约 30 天滑动窗口造成的历史缺失无法恢复。
-- DeepSeek：只读每个会话目录最高版本 generation；优先顶层用量，否则取嵌入 stream 最后一个 usage。同一步的快照替换，明确重试边界后累加。带种子历史的会话标记不完整，尚未验证其重放去重。单个 Zstd 帧或解压结果超过 64 MiB 时拒绝，避免无界内存占用。
-
-保留 `codex-auto-review` 等原始标识，不根据日期推测实际模型。更详细的对账记录和来源见 [VALIDATION.md](VALIDATION.md)。
-
-## 与 ahhtou.wang 的关系
-
-首版 JSON 保留 ccusage 的 `daily[].agents[].modelBreakdowns[]` 结构，兼容 `daily --json --by-agent -O` 调用形状；这是统计结构兼容，尚未承诺完全等价替换。**目前没有替换线上 ccusage 同步链路，也没有自动推送功能。** 后续接入需校验缺失值、一次性凭证、设备身份、整日替换及减少保护。
-
-## 开发
+## 开发与验证
 
 ```bash
-node --check usagelet.mjs
-node --test test/*.test.mjs
+npm ci
+npm run build       # src/ → dist/usagelet.mjs 与 SHA-256 清单
+npm test            # 构建产物 + 120 项上游固定预期回归 + 18 项扩展测试
 ```
 
-没有运行依赖，也没有构建步骤；仓库里的 `package.json` 仅为开发命令提供便利，单文件运行不需要它。开发计划和提交署名规范见 [AGENTS.md](AGENTS.md)，`CLAUDE.md` 是它的软链接。
+构建工具 esbuild、格式化工具 Prettier 均为锁定版本的开发依赖，产物不含第三方运行依赖。模块分工：
 
-许可证为 MIT。参考项目的版权与许可保留在 [LICENSE](LICENSE) 及单文件脚本内。
+- `src/adapters/`：三个来源的兼容采集器、扩展采集器与 DeepSeek。
+- `src/compat.mjs`、`src/json.mjs`：上游数值、别名、时间戳和 JSON 边界语义。
+- `src/aggregate.mjs`、`collect.mjs`、`cli.mjs`：聚合、路径发现及命令行。
+- `scripts/build.mjs`：打包；`scripts/oracle.mjs`：直接调用基线 ccusage 生成并比较固定预期。
+
+若已安装 ccusage 20.0.21：
+
+```bash
+CCUSAGE_BIN=/absolute/path/to/ccusage npm run test:oracle
+CCUSAGE_BIN=/absolute/path/to/ccusage node scripts/compare.mjs --tz Asia/Shanghai
+```
+
+对比不会先重命名结果、删除 compaction 数字或只比较相同的行。`test/golden.json` 是 40 组脱敏样本在三个时区下的真实 ccusage 输出预期；不安装 ccusage 也可运行完整回归测试。更详细的规则映射与冻结本机快照对账见 [VALIDATION.md](VALIDATION.md)。
+
+现有 `ahhtou.wang` 同步链路尚未切换，也未改动线上统计数据。线上替换需另行验证凭证、设备身份及减少保护。
+
+协作与开发计划见 [AGENTS.md](AGENTS.md)，`CLAUDE.md` 是其软链接。代码与分发产物保留 [MIT 许可](LICENSE)。

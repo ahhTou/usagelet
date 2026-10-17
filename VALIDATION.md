@@ -1,64 +1,64 @@
-# 验证与来源记录
+# 兼容性验收
 
-> 2026-10-18 · v0.1.0 · 仅 macOS 实测
+> 2026-10-18 · v0.2.0 · 默认模式固定对齐 ccusage 20.0.21
 
-## 参考版本
+## 对齐契约
 
-- ccusage v20.0.21：本机已安装版本，也是旧同步链路的统计基线；已获取对应 tag 源码。
-- ccusage 主分支提交 [`c1eb44896082d5bf0915bae578eb5b14c031f49f`](https://github.com/ccusage/ccusage/commit/c1eb44896082d5bf0915bae578eb5b14c031f49f)：参考 Claude 去重、Codex 压缩 / compaction 规则、ZCode 只读 SQLite 与缓存拆分。该版本核心是 Rust；usagelet 是 JS 实现，不调用其二进制。
-- DeepSeek Harness 提交 [`687f282e8625c6b8d11ff58211a90524be2e4317`](https://github.com/deepseek-ai/deepseek-harness/commit/687f282e8625c6b8d11ff58211a90524be2e4317)：参考 session 持久化格式、Zstd 帧结构和 token-meter 快照 / 重试规则。
+验证对象为 Claude Code、Codex、ZCode 的 `daily --json --by-agent -O`：逐日、逐 Agent、逐模型的四项 token，及日、Agent、全局总量。费用估算、终端展示和其他命令不在实现范围内。
 
-上游均为 MIT。仓库与单文件保留相关版权及许可。测试样本为人工构造的脱敏记录，不包含本机对话、凭据或用户路径。
+上游版本固定为 tag `v20.0.21`，提交 [`3c5556a775ebcf1e59844d4283c8c5b30529c290`](https://github.com/ccusage/ccusage/tree/v20.0.21)。本机基线程序打印 `ccusage 20.0.21`，oracle 脚本先检查版本再运行。后续上游升级必须更新契约并重跑对比，不能沿用当前结论。
 
-## 自动测试
+**v0.1.0 的“排除新增统计、统一展示名后相同”不作为验收依据。** v0.2.0 的默认模式直接比较两边输出，差异必须为零；扩展能力通过显式 `--mode extended` 使用。
 
-运行 `node --test test/*.test.mjs`。当前 18 项通过，覆盖：
+## 源码逐项映射
 
-- Claude 同一会话跨文件去重、不同会话隔离、完整快照选择、侧链重放、TTL 缓存桶、advisor 模型归属。
-- Codex 累计差分、重复快照、模型切换、缓存互斥、普通 / 压缩副本、分支前缀和父会话缺失。
-- Codex local / remote compaction，以及 compaction 标记前后顺序不同的去重。
-- ZCode 只读访问、仅已完成请求、缓存拆分。
-- DeepSeek 最高代际、拼接 Zstd 帧、stream 用量、快照替换、重试累加及种子历史警告。
-- 缺失值、坏 JSON、未知版本、损坏 / 截断压缩文件、时区、日期过滤和安全整数溢出。
-- 将单个 `.mjs` 复制到干净目录直接运行，不依赖 package.json 或 node_modules。
+路径均相对于上述上游版本。
 
-## 本机真实数据验证
+| 上游 | usagelet | 核对内容 |
+|---|---|---|
+| `rust/adapters/claude/src/daily.rs` | `src/adapters/claude.mjs` | 读取、字段有效性、去重键、完整快照选择、主线优先、advisor |
+| `rust/adapters/claude/src/lib.rs`、`paths.rs` | Claude 适配器、`src/json.mjs`、`collect.mjs` | AgentProgress、null 约束、缺省值、会话路径及多个主目录 |
+| `rust/adapters/codex/src/parser.rs`、`types.rs` | `src/adapters/codex.mjs`、`compat.mjs` | 累计差分、整数别名及字符串、headless、时间戳与模型回退 |
+| `rust/adapters/codex/src/codex-auto-review-fallbacks.json` | 同名参考数据文件 | 使用上游固定发布日期表，不在比较时改名 |
+| `rust/adapters/codex/src/paths.rs`、`replay.rs`、`loader.rs`、`aggregate.rs` | Codex 适配器、`collect.mjs` | 活动日志优先、分支前缀 / 分叉时间、重写时间突发、跨文件事件去重 |
+| `rust/adapters/zcode/src/loader.rs`、`parser.rs` | `src/adapters/zcode.mjs` | 旧 / 新表、完成状态、缓存拆分、SQLite 数值转换与用量 id 去重 |
+| `rust/crates/ccusage-core/src/utils.rs`、`model_aliases.rs` | `compat.mjs`、`aggregate.mjs` | 总量补差、配置别名、四项和与记录总量的区别 |
 
-环境为 macOS arm64、Node.js 22.23.2，默认四个来源全量读取。一次完整运行约 **4.5 秒**，结束时 RSS 约 **200 MiB**；这是本机单次测量，不是跨平台性能承诺，运行期间日志会继续增长。
+上游代码均为 MIT，版权与完整许可保留在仓库和打包产物中。
 
-| 来源 | 扫描文件 | 去重 / 合并后用量记录 |
-|---|---:|---:|
-| Claude Code | 416 | 46,646 |
-| Codex（含归档和压缩） | 352 | 12,699 |
-| ZCode | 1 个 SQLite | 7,460 |
-| DeepSeek Harness | 4 | 52 |
+## 固定样本：120 项真实上游输出
 
-覆盖 155 天。数值是验证时快照，不固定在代码或测试中。
+`test/cases.mjs` 定义 40 组人工脱敏场景，每组运行 `UTC`、`Asia/Shanghai`、`America/New_York` 三个时区。`scripts/oracle.mjs` 对同一份输入运行真实 ccusage 与 usagelet，比较完整记录集合和全局总量；`test/golden.json` 保存 ccusage 的真实预期，常规测试不依赖本机安装 ccusage。
 
-### 与旧 ccusage 的差异
+覆盖 Claude 侧链与嵌套会话、缺 id / requestId、advisor、无模型记录、详细 TTL 桶、fast / 用户别名、无效字段 / null / 重复字段 / 非整数字面量；Codex 累计重置、缺模型回退、auto-review 发布边界、headless 多格式、字符串计数、缓存钳制、跨文件 / 别名后的重复、活动与归档优先、父日志缺失 / 不匹配、分叉截止、压缩及独立 compaction 的基线排除规则；ZCode 旧表、补输出 / 额外总量、负数 / 小数转换；以及混合来源和多个主目录。
 
-以 `ccusage daily --json --by-agent -O --timezone Asia/Shanghai` 为基线，比较日期、Agent、模型及四项 token：
+结果：**120 项直接对比零差异**。测试过程中发现并修正了 ZCode SQLite 实际按整数读取时截断小数的语义差异。
 
-- Claude：同一快照中所有汇总行四项计数一致。对账过程中确认必须按会话隔离去重，并优先读取 `cache_creation` 的详细 TTL 桶。
-- ZCode：各汇总行四项计数一致。
-- Codex：v20.0.21 不读 `.zst`，usagelet 会读，因此完整历史应有增量。该版本也未统计独立 compaction 用量；排除新增 compaction 逻辑、统一其 `codex-auto-review → gpt-5.5` 展示映射后，2026-10-18 之前的未压缩历史汇总逐项一致。这个排除操作仅用于对账，不是发布版功能；发布版保留原始标识并计入已确认的 compaction 用量。当前日会继续产生新记录，不以不同时间点的当日值做相等断言。
+另保留 18 项扩展模式、压缩读取、损坏数据和单文件分发测试。共 **138 项测试通过**。
 
-### DeepSeek 独立复核
+## 冻结本机日志：六组直接比较
 
-使用 DeepSeek 官方源码中的 `scanZstdFrames` / `decompressZstdFrame` 独立解码四个本机会话，共 **257 帧**。按其结算用量规则复核得到：
+为避免活跃会话在两次采集之间增长，先在本机临时目录冻结日志：只复制日志文件，ZCode 使用 SQLite 只读连接的 backup API 建立一致性副本。未复制或读取凭据。两边均从这份快照读取，快照不提交、不上传，完成后删除。
 
-| 项目 | token |
-|---|---:|
-| 不含缓存输入 | 90,992 |
-| 输出 | 38,095 |
-| 缓存写入 | 0 |
-| 缓存读取 | 2,053,632 |
-| 合计 | 2,182,719 |
+快照包含 Claude 416 个普通日志、Codex 23 个普通日志和 ZCode 的一个数据库。基线不读取压缩归档，因此本次契约范围内不复制压缩文件。这是两边一致的数据发现规则，不是比较后过滤差异。
 
-与 usagelet 的 52 条用量汇总一致。只用 Node 22 一次性解压整个拼接文件会只得到首帧，不能拿它当完整日志验证结果；usagelet 为 `.zstd` 实现了逐帧读取。
+| 时区 | 范围 | 天数 | 比较记录数（不含全局总计） | 差异 |
+|---|---|---:|---:|---:|
+| UTC | 全量 | 72 | 324 | 0 |
+| Asia/Shanghai | 全量 | 75 | 338 | 0 |
+| America/New_York | 全量 | 73 | 321 | 0 |
+| UTC | 2026-09-01 至 2026-10-01 | 31 | 163 | 0 |
+| Asia/Shanghai | 同上 | 31 | 169 | 0 |
+| America/New_York | 同上 | 31 | 161 | 0 |
 
-## 发布与边界
+冻结时 Claude 去重后 46,646 条、Codex 730 条、ZCode 7,460 条。源码模块版每组采集约 6–7 秒；不是跨机器的性能承诺。日、来源及模型行之外，最终检查还包含全局四项与总 token。
 
-v0.1.0 没有修改服务器用量数据、令牌、配置或现有同步链路。发布对象只有静态 JS 文件与 SHA-256 校验清单。
+## 打包与平台边界
 
-尚未验证：Linux / Windows、DeepSeek 每个历史格式的真实安装、带种子历史的去重、缺父日志或时间被重写的 Codex 分支的完整性。Qoder 按用户要求暂缓。以上情况不应被表述为已经全面支持。
+`npm run build` 将模块打包为单个 `dist/usagelet.mjs`，不复制 node_modules 或 JSON 文件到使用端。在干净目录只放打包后的 JS 即可执行；生成独立 SHA-256 清单。
+
+目前仅 macOS arm64、Node.js 22.23.2 实测。上述结论代表固定版本、已覆盖样本和冻结本机数据的验证结果，不是对未来日志格式或任意平台的无条件承诺。异常时应保留诊断，不静默宣称对齐。
+
+DeepSeek 保留原有扩展适配，参考提交 [`687f282e8625c6b8d11ff58211a90524be2e4317`](https://github.com/deepseek-ai/deepseek-harness/commit/687f282e8625c6b8d11ff58211a90524be2e4317)。此前已用官方解码器独立复核 257 帧 / 52 条用量；它不纳入 ccusage 三来源兼容契约。Qoder 暂缓。
+
+本次没有替换线上同步链路、修改线上用量、用户、令牌或配置，仅发布静态构建产物。
