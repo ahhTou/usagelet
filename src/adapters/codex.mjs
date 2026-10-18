@@ -25,6 +25,10 @@ function modelFor(recorded, current, date) {
     fallback: (!recorded && !current) || raw === 'codex-auto-review',
   };
 }
+const SERVICE_TIERS = { default: 'standard', standard: 'standard', fast: 'fast', priority: 'fast' };
+// 重复事件的档位合并：standard 优先于 fast（与 ccusage merge_codex_service_tiers 相同）。
+const mergeTier = (a, b) =>
+  a === 'standard' || b === 'standard' ? 'standard' : a === 'fast' || b === 'fast' ? 'fast' : null;
 function resultFields(r) {
   return [r, r.data, r.result, r.response].filter((x) => x && typeof x === 'object');
 }
@@ -40,7 +44,8 @@ async function readSession(file, ctx) {
   let previous = null,
     model = null,
     meta = {},
-    first = true;
+    first = true,
+    serviceTier = null;
   const events = [],
     mtime = (await stat(file)).mtime.toISOString();
   for await (const r of records(file, ctx)) {
@@ -61,9 +66,16 @@ async function readSession(file, ctx) {
       continue;
     }
     if (r.type === 'event_msg') {
-      if (p.type !== 'token_count') continue;
+      if (p.type !== 'token_count' && p.type !== 'thread_settings_applied') continue;
       const at = timestamp(r.timestamp);
       if (!at) continue;
+      // 只影响费用：没有 service_tier 字段的设置事件不改变当前档位，无法识别的值清空档位。
+      if (p.type === 'thread_settings_applied') {
+        const tier = p.thread_settings?.service_tier;
+        if (typeof tier === 'string')
+          serviceTier = Object.hasOwn(SERVICE_TIERS, tier) ? SERVICE_TIERS[tier] : null;
+        continue;
+      }
       const info = p.info,
         total = rawCodex(info?.total_token_usage),
         last = rawCodex(info?.last_token_usage);
@@ -77,7 +89,13 @@ async function readSession(file, ctx) {
         typeof r.timestamp === 'string' ? r.timestamp : at,
       );
       model = resolved.current;
-      events.push({ raw, timestamp: at, model: resolved.model, fallback: resolved.fallback });
+      events.push({
+        raw,
+        timestamp: at,
+        model: resolved.model,
+        fallback: resolved.fallback,
+        serviceTier,
+      });
       continue;
     }
     // session 专用事件不作为 headless usage 重读，尤其不额外计入 compaction。
@@ -93,7 +111,13 @@ async function readSession(file, ctx) {
       typeof time.raw === 'string' ? time.raw : time.value,
     );
     model = resolved.current;
-    events.push({ raw, timestamp: time.value, model: resolved.model, fallback: resolved.fallback });
+    events.push({
+      raw,
+      timestamp: time.value,
+      model: resolved.model,
+      fallback: resolved.fallback,
+      serviceTier: null,
+    });
   }
   return { file, meta, events };
 }
@@ -141,25 +165,34 @@ function replayed(session, sessions) {
     return true;
   });
 }
+// 返回去重后的事件（首次出现保留，重复事件只合并服务档位），由 cost.mjs 按 ccusage 的
+// CodexGroup 规则按日聚合、计费。
 export async function codex(files, ctx) {
   const sessions = [];
   for (const file of files) sessions.push(await readSession(file, ctx));
-  const seen = new Set(),
+  const seen = new Map(),
     out = [];
   for (const session of sessions)
     for (const e of replayed(session, sessions)) {
       const model = alias(e.model, ctx.aliases),
         key = JSON.stringify([e.timestamp, model, rawSignature(e.raw)]);
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({
+      const existing = seen.get(key);
+      if (existing) {
+        existing.serviceTier = mergeTier(existing.serviceTier, e.serviceTier);
+        continue;
+      }
+      const event = {
         agent: 'codex',
         model,
         timestamp: e.timestamp,
+        raw: e.raw,
         ...rawBuckets(e.raw),
         reportedTotalTokens: e.raw.total_tokens,
         isFallbackModel: e.fallback,
-      });
+        serviceTier: e.serviceTier,
+      };
+      seen.set(key, event);
+      out.push(event);
     }
   return out;
 }

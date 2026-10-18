@@ -1,0 +1,431 @@
+{
+  "reference": "deepseek-harness@687f282e8625c6b8d11ff58211a90524be2e4317 dsh-token-meter tokenUsage",
+  "fixtures": {
+    "v0-subagent-settlement-child": {
+      "source": "apps/cli/tests/profiles/headless/tests/expected/subagent-settlement/child.replay.jsonl",
+      "id": "subagent-settlement-child",
+      "version": 0,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 10,
+        "outputTokens": 5,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 10,
+        "outputTokens": 5,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v0-empty-response-retry": {
+      "source": "snapshots/session/empty-response-retry/session.jsonl",
+      "id": "snap-8b136ef1-s1",
+      "version": 0,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 12,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 12,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v3-empty-response-retry": {
+      "source": "snapshots/session/empty-response-retry-current/session.v3.jsonl",
+      "id": "snap-fe9be6cd-s1",
+      "version": 3,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 12,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 12,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v4-empty-response-retry": {
+      "source": "snapshots/session/empty-response-retry-current/session.v4.jsonl",
+      "id": "snap-fe9be6cd-s1",
+      "version": 4,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 12,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 12,
+        "outputTokens": 3,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v1-text-turn": {
+      "source": "snapshots/session/text-turn/session.v1.jsonl",
+      "id": "snap-bca1c2fd-s1",
+      "version": 1,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 3091,
+        "outputTokens": 23,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 3091,
+        "outputTokens": 23,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v0-packed-chunks": {
+      "source": "snapshots/session/packed-chunks/session.jsonl",
+      "id": "snap-6fc5ff51-s1",
+      "version": 0,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 3045,
+        "outputTokens": 135,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 3045,
+        "outputTokens": 135,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v2-model-switch": {
+      "source": "snapshots/session/model-switch-notice/session.v2.jsonl",
+      "id": "snap-02e65b19-s1",
+      "version": 2,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 16152,
+        "outputTokens": 132,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 16152,
+        "outputTokens": 132,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v4-model-switch": {
+      "source": "snapshots/session/model-switch-notice/session.v4.jsonl",
+      "id": "snap-02e65b19-s1",
+      "version": 4,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 16152,
+        "outputTokens": 132,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 16152,
+        "outputTokens": 132,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v2-compaction-recovery": {
+      "source": "snapshots/session/compaction-recovery/session.v2.jsonl",
+      "id": "snap-0d759c24-s1",
+      "version": 2,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 44,
+        "outputTokens": 10,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 44,
+        "outputTokens": 10,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 20,
+        "outputTokens": 4,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 1
+      }
+    },
+    "v4-compaction-recovery": {
+      "source": "snapshots/session/compaction-recovery/session.v4.jsonl",
+      "id": "snap-0d759c24-s1",
+      "version": 4,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 44,
+        "outputTokens": 10,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 44,
+        "outputTokens": 10,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 20,
+        "outputTokens": 4,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 1
+      }
+    },
+    "v2-fork-parent": {
+      "source": "snapshots/sdk/subagent-fork-in-process/session.v2.jsonl",
+      "id": "snap-8384ec30-s1",
+      "version": 2,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 3108,
+        "outputTokens": 202,
+        "cacheReadTokens": 5888,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 3108,
+        "outputTokens": 202,
+        "cacheReadTokens": 5888,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v2-fork-child": {
+      "source": "snapshots/sdk/subagent-fork-in-process/session.1.v2.jsonl",
+      "id": "snap-8384ec30-s2",
+      "version": 2,
+      "isSeeded": true,
+      "all": {
+        "uncachedInputTokens": 2982,
+        "outputTokens": 64,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 97,
+        "outputTokens": 39,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v4-fork-parent": {
+      "source": "snapshots/sdk/subagent-fork-in-process/session.v4.jsonl",
+      "id": "snap-8384ec30-s1",
+      "version": 4,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 3108,
+        "outputTokens": 202,
+        "cacheReadTokens": 5888,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 3108,
+        "outputTokens": 202,
+        "cacheReadTokens": 5888,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v4-fork-child": {
+      "source": "snapshots/sdk/subagent-fork-in-process/session.1.v4.jsonl",
+      "id": "snap-8384ec30-s2",
+      "version": 4,
+      "isSeeded": true,
+      "all": {
+        "uncachedInputTokens": 2982,
+        "outputTokens": 64,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 97,
+        "outputTokens": 39,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v0-subagent-multi-parent": {
+      "source": "snapshots/session/subagent-multi/session.jsonl",
+      "id": "snap-762c965a-s1",
+      "version": 0,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 3186,
+        "outputTokens": 255,
+        "cacheReadTokens": 6016,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 3186,
+        "outputTokens": 255,
+        "cacheReadTokens": 6016,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v0-subagent-multi-child-1": {
+      "source": "snapshots/session/subagent-multi/session.1.jsonl",
+      "id": "snap-762c965a-s2",
+      "version": 0,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 49,
+        "outputTokens": 23,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 49,
+        "outputTokens": 23,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    },
+    "v0-subagent-multi-child-2": {
+      "source": "snapshots/session/subagent-multi/session.2.jsonl",
+      "id": "snap-762c965a-s3",
+      "version": 0,
+      "isSeeded": false,
+      "all": {
+        "uncachedInputTokens": 48,
+        "outputTokens": 21,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "own": {
+        "uncachedInputTokens": 48,
+        "outputTokens": 21,
+        "cacheReadTokens": 2816,
+        "cacheWriteTokens": 0
+      },
+      "compaction": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cacheReadTokens": 0,
+        "cacheWriteTokens": 0,
+        "count": 0
+      }
+    }
+  },
+  "dshVersion": "0.2.1-rc.2"
+}

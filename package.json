@@ -1,9 +1,9 @@
 {
   "name": "usagelet",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "模块化开发、单文件分发的 Agent 用量统计工具",
+  "description": "模块化开发、单文件分发的 Agent 用量统计工具，输出与 ccusage 一致",
   "engines": {
     "node": ">=22.16.0"
   },
@@ -12,6 +12,8 @@
     "build": "node scripts/build.mjs",
     "test": "npm run build && node --test test/*.test.mjs",
     "test:oracle": "npm run build && node scripts/oracle.mjs",
+    "test:dsh": "node scripts/dsh-oracle.mjs",
+    "compare": "npm run build && node --no-warnings scripts/compare.mjs --bundle",
     "check": "node --check src/index.mjs",
     "format": "prettier --write src scripts test/*.mjs",
     "format:check": "prettier --check src scripts test/*.mjs"

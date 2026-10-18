@@ -1,5 +1,6 @@
-import { alias, totalFallback } from '../compat.mjs';
+import { totalFallback } from '../compat.mjs';
 import { buckets, issue } from '../shared.mjs';
+import { zcodeCost } from '../cost.mjs';
 const REQUIRED_MODEL_COLUMNS = [
   'id',
   'session_id',
@@ -60,13 +61,16 @@ export async function zcode(paths, ctx) {
         'cache_creation_input_tokens',
         'cache_read_input_tokens',
         'computed_total_tokens',
+        'provider_id',
       ]
         .map((k) =>
           columns.has(k)
             ? k
             : k === 'computed_total_tokens'
               ? `input_tokens + output_tokens AS ${k}`
-              : `0 AS ${k}`,
+              : k === 'provider_id'
+                ? `NULL AS ${k}`
+                : `0 AS ${k}`,
         )
         .join(', ');
       for (const r of db
@@ -95,11 +99,19 @@ export async function zcode(paths, ctx) {
         const data = totalFallback(buckets(u, 'zcode'), number(r.computed_total_tokens));
         if (!Object.values(data).some((v) => v > 0)) continue;
         seen.add(r.id);
+        const timestamp = Math.trunc(r.started_at),
+          model = r.model_id.trim();
         out.push({
           agent: 'zcode',
-          model: alias(r.model_id.trim(), ctx.aliases),
-          timestamp: Math.trunc(r.started_at),
+          model,
+          timestamp,
           ...data,
+          ...zcodeCost(ctx, {
+            model,
+            providerId: typeof r.provider_id === 'string' ? r.provider_id : null,
+            usage: data,
+            timestamp,
+          }),
         });
       }
     } catch (e) {
@@ -109,5 +121,6 @@ export async function zcode(paths, ctx) {
       db?.close();
     }
   }
-  return out;
+  // 与 ccusage 相同：跨库按 id 去重（先到先得）后按时间稳定排序。
+  return out.sort((a, b) => a.timestamp - b.timestamp);
 }

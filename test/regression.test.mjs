@@ -105,18 +105,21 @@ test('collect 规范化并校验 since / until', async (t) => {
   assert.equal(cli(f, ['--since', '2026-02-30']).status, 1);
 });
 
-test('契约外来源不标注 ccusage 兼容', async (t) => {
+test('兼容口径：三来源对齐 ccusage，DSH 对齐 DSH 官方口径；deepseek 是 dsh 的别名', async (t) => {
   const f = await fixture(t);
-  assert.equal((await collect(f.options)).metadata.compatibility, 'ccusage@20.0.21');
-  assert.equal(
-    (await collect({ ...f.options, agents: ['claude'] })).metadata.compatibility,
-    'ccusage@20.0.21',
-  );
+  const all = (await collect(f.options)).metadata.compatibility;
+  assert.equal(all.ccusage, '20.0.21');
+  assert.deepEqual(all.agents, ['claude', 'codex', 'zcode']);
+  assert.match(all.dsh, /tokenUsage/);
+  const claudeOnly = (await collect({ ...f.options, agents: ['claude'] })).metadata;
+  assert.deepEqual(claudeOnly.compatibility.agents, ['claude']);
+  assert.equal(claudeOnly.compatibility.dsh, null);
   for (const agents of [['deepseek'], ['claude', 'deepseek']]) {
     const data = await collect({ ...f.options, agents });
-    assert.equal(data.metadata.mode, 'ccusage');
-    assert.equal(data.metadata.compatibility, null);
+    assert.ok(data.metadata.sources.some((s) => s.agent === 'dsh'));
+    assert.match(data.metadata.compatibility.dsh, /tokenUsage/);
   }
+  assert.equal((await collect({ ...f.options, mode: 'extended' })).metadata.compatibility, null);
 });
 
 test('--source zcode= 指向目录时报路径并提示需要数据库文件', async (t) => {
@@ -139,11 +142,8 @@ test('--agent 去掉空白与空项', async (t) => {
   const run = cli(f, ['--agent', ' claude, ,', '--json']);
   assert.equal(run.status, 0, run.stderr);
   const result = JSON.parse(run.stdout);
-  assert.deepEqual(
-    result.metadata.sources.map((s) => s.agent),
-    ['claude'],
-  );
-  assert.equal(result.metadata.version, VERSION);
+  assert.deepEqual(result.daily[0].metadata.agents, ['claude']);
+  assert.equal(cli(f, ['--version']).stdout.trim(), VERSION);
   const empty = cli(f, ['--agent', ',']);
   assert.equal(empty.status, 1);
   assert.match(empty.stderr, /--agent 缺少值/);

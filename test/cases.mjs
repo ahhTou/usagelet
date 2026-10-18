@@ -39,6 +39,11 @@ export const meta = (id, parent, time = '2026-05-10T17:00:00Z') => ({
   payload: { id, forked_from_id: parent },
 });
 export const context = (model) => ({ type: 'turn_context', payload: { model } });
+export const tier = (service_tier, time = TIME) => ({
+  type: 'event_msg',
+  timestamp: time,
+  payload: { type: 'thread_settings_applied', thread_settings: { service_tier } },
+});
 const C = 'claude/projects/p/a.jsonl',
   X = 'codex/sessions/a.jsonl';
 const withMessage = (r, changes) => ({ ...r, message: { ...r.message, ...changes } });
@@ -379,6 +384,99 @@ export const CASES = [
       ],
     },
   },
+  // ——— v0.3 费用相关：fast 倍率、1h 缓存、记录费用、长上下文分档、DeepSeek V4 时段价、
+  // Codex 服务档位与 config.toml、ZCode 的 Z.ai 规则、别名与缺价模型 ———
+  {
+    name: 'cost-claude-fast-ttl-recorded',
+    costModes: ['calculate', 'display'],
+    files: cp([
+      withMessage(
+        claude('fast', {
+          speed: 'fast',
+          cache_creation: { ephemeral_5m_input_tokens: 1000, ephemeral_1h_input_tokens: 2000 },
+        }),
+        { model: 'claude-opus-4-6' },
+      ),
+      withMessage(claude('recorded', {}, { costUSD: 1.25 }), { model: 'claude-opus-4-6' }),
+      withMessage(claude('standard', { speed: 'standard' }), { model: 'claude-opus-4-7' }),
+    ]),
+  },
+  {
+    name: 'cost-long-context-tiers',
+    files: cp([
+      claude('tiered', {
+        input_tokens: 250000,
+        output_tokens: 300000,
+        cache_read_input_tokens: 10000,
+      }),
+      withMessage(claude('two-stage', { input_tokens: 300000 }), { model: 'gpt-5.5' }),
+      withMessage(claude('short', { input_tokens: 1000 }), { model: 'gpt-5.5' }),
+    ]),
+  },
+  {
+    name: 'cost-deepseek-v4-schedule',
+    files: cp(
+      [
+        ['before', '2026-08-10T02:30:00Z'],
+        ['peak', '2026-09-15T02:30:00Z'],
+        ['offpeak', '2026-09-15T12:00:00Z'],
+        ['weekend', '2026-09-19T02:30:00Z'],
+      ].map(([id, timestamp]) =>
+        withMessage(claude(id, {}, { timestamp }), { model: 'deepseek-v4-flash' }),
+      ),
+    ),
+  },
+  {
+    name: 'cost-codex-service-tier',
+    files: xp([
+      context('gpt-5.5'),
+      tier('fast'),
+      token(undefined, raw(300000, 1000, 1000)),
+      tier('standard'),
+      token(undefined, raw(1000, 10, 0)),
+      {
+        type: 'event_msg',
+        timestamp: TIME,
+        payload: { type: 'thread_settings_applied', thread_settings: {} },
+      },
+      token(undefined, raw(2000, 20, 100)),
+      tier('priority'),
+      token(undefined, raw(3000, 30, 200)),
+      tier('mystery'),
+      token(undefined, raw(4000, 40, 300)),
+      context('deepseek-v4-pro'),
+      tier('fast'),
+      token(undefined, raw(5000, 50, 400), '2026-09-15T02:30:00Z'),
+      token(undefined, raw(6000, 60, 500), '2026-09-15T12:00:00Z'),
+    ]),
+  },
+  {
+    name: 'cost-codex-config-fast',
+    files: {
+      [X]: [context('gpt-5.5'), token(undefined, raw(1000, 100, 200))],
+      'codex/config.toml': ['# 本机配置', 'model = "gpt-5.5"', 'service_tier = "fast" # 注释'],
+    },
+  },
+  {
+    name: 'cost-zcode-providers',
+    db: {
+      rows: [
+        ['z1', 'glm-4.6', 'zai', 1000, 100, 200, 50],
+        ['z2', 'GLM-4.5', null, 1000, 100, 0, 0],
+        ['z3', 'gpt-5', 'openai', 1000, 100, 0, 0],
+        ['z4', 'glm-5', ' Z.AI ', 2000, 200, 300, 100],
+        ['z5', 'deepseek-v4-flash', null, 3000, 300, 400, 0],
+      ],
+    },
+  },
+  {
+    name: 'cost-aliases-and-unpriced',
+    env: { CCUSAGE_MODEL_ALIASES: 'my-claude=claude-opus-4-6' },
+    files: cp([
+      withMessage(claude('alias'), { model: 'my-claude' }),
+      withMessage(claude('unknown'), { model: 'mystery-model-1' }),
+    ]),
+  },
 ];
 export async function populate(root, c) {
   for (const [name, rows] of Object.entries(c.files ?? {})) {
@@ -398,6 +496,16 @@ export async function populate(root, c) {
     db.exec(
       "CREATE TABLE session (id TEXT PRIMARY KEY,directory TEXT); INSERT INTO session VALUES ('s','/project')",
     );
+    if (typeof c.db === 'object') {
+      db.exec(
+        'CREATE TABLE model_usage (id TEXT,session_id TEXT,started_at INTEGER,model_id TEXT,provider_id TEXT,status TEXT,input_tokens INTEGER,output_tokens INTEGER,cache_read_input_tokens INTEGER,cache_creation_input_tokens INTEGER)',
+      );
+      const q = db.prepare('INSERT INTO model_usage VALUES (?,?,?,?,?,?,?,?,?,?)');
+      for (const [id, model, provider, ...counts] of c.db.rows)
+        q.run(id, 's', Date.parse(TIME), model, provider, 'completed', ...counts);
+      db.close();
+      return;
+    }
     if (c.db === 'no-model-usage') {
       db.close();
       return;
@@ -485,4 +593,30 @@ export function normalize(result) {
     result.totals.totalTokens,
   ]);
   return output.sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+}
+
+// usagelet 侧与 ccusage 对照的输出：by-agent JSON、普通 JSON、120 列无颜色表格，以及额外费用模式。
+// lib 为 src/index.mjs 或打包后的 dist/usagelet.mjs（两者导出相同）。
+export async function outputs(lib, root, c, timezone) {
+  const env = environment(root, c);
+  const base = { home: root, env, timezone, agents: ['claude', 'codex', 'zcode'] };
+  const result = await lib.collect(base);
+  const modes = {};
+  for (const costMode of c.costModes ?? [])
+    modes[costMode] = lib.reportJson((await lib.collect({ ...base, costMode })).rows, {
+      byAgent: true,
+    });
+  return {
+    byAgent: lib.reportJson(result.rows, { byAgent: true }),
+    plain: lib.reportJson(result.rows),
+    table: lib.renderTable(result.rows, {
+      detectedAgents: result.detectedAgents,
+      terminalWidth: 120,
+      isTTY: false,
+      color: false,
+      offline: true,
+      env: {},
+    }),
+    modes,
+  };
 }

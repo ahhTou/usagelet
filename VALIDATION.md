@@ -1,88 +1,75 @@
 # 兼容性验收
 
-> 2026-10-18 · v0.2.1 · 默认模式固定对齐 ccusage 20.0.21
+> 2026-10-18 · v0.3.0 · 输出与 ccusage 20.0.21 逐字节一致；DeepSeek Harness 对齐 DSH 官方口径
 
 ## 对齐契约
 
-验证对象为 Claude Code、Codex、ZCode 的 `daily --json --by-agent -O`：逐日、逐 Agent、逐模型的四项 token，及日、Agent、全局总量。费用估算、终端展示和其他命令不在实现范围内。
+**Claude Code、Codex、ZCode**：`ccusage daily` 的全部输出逐字节相同——`--json`、`--json --by-agent`、`--json --no-cost` 的文本（结构、键序、整数 / 浮点写法、`unpricedModels`），以及终端表格的 stdout 与 stderr（标题框、列宽适配与换行、`--compact`、`--no-cost`、`--breakdown`、Total 行、缺价 `WARN`、紧凑提示）。费用等同 `ccusage -O`（内嵌价格快照），费用模式 `auto` / `calculate` / `display` 均对齐。
 
-上游版本固定为 tag `v20.0.21`，提交 [`3c5556a775ebcf1e59844d4283c8c5b30529c290`](https://github.com/ccusage/ccusage/tree/v20.0.21)。本机基线程序打印 `ccusage 20.0.21`，oracle 脚本先检查版本再运行。后续上游升级必须更新契约并重跑对比，不能沿用当前结论。
+上游版本固定为 tag `v20.0.21`，提交 [`3c5556a775ebcf1e59844d4283c8c5b30529c290`](https://github.com/ccusage/ccusage/tree/v20.0.21)；本机基线程序打印 `ccusage 20.0.21`，对照脚本先检查版本。后续上游升级必须更新契约并重跑对比。比较时不重命名、不过滤、不容差：字符串完全相同才算通过。
 
-**v0.1.0 的“排除新增统计、统一展示名后相同”不作为验收依据。** v0.2.0 的默认模式直接比较两边输出，差异必须为零；扩展能力通过显式 `--mode extended` 使用。
+**DeepSeek Harness**：ccusage 不支持 DSH。usagelet 按 DSH 自己的 tokenUsage 投影统计，跨会话只计自有事件，并用 DSH 自带代码核对（见下）。DSH 行的 JSON / 表格格式与其他来源相同，Agent 为 `dsh` / `DeepSeek Harness`。
 
-## 源码逐项映射
+`--extended` 扩展口径不在契约内。
 
-路径均相对于上述上游版本。
+## 源码映射
 
-| 上游 | usagelet | 核对内容 |
+路径均相对于上述 ccusage 版本。
+
+| 上游 | usagelet | 内容 |
 |---|---|---|
-| `rust/adapters/claude/src/daily.rs` | `src/adapters/claude.mjs` | 读取、字段有效性、去重键、完整快照选择、主线优先、advisor |
-| `rust/adapters/claude/src/lib.rs`、`paths.rs` | Claude 适配器、`src/json.mjs`、`collect.mjs` | AgentProgress、null 约束、缺省值、会话路径及多个主目录 |
-| `rust/adapters/codex/src/parser.rs`、`types.rs` | `src/adapters/codex.mjs`、`compat.mjs` | 累计差分、整数别名及字符串、headless、时间戳与模型回退 |
-| `rust/adapters/codex/src/codex-auto-review-fallbacks.json` | 同名参考数据文件 | 使用上游固定发布日期表，不在比较时改名 |
-| `rust/adapters/codex/src/paths.rs`、`replay.rs`、`loader.rs`、`aggregate.rs` | Codex 适配器、`collect.mjs` | 活动日志优先、分支前缀 / 分叉时间、重写时间突发、跨文件事件去重 |
-| `rust/adapters/zcode/src/loader.rs`、`parser.rs` | `src/adapters/zcode.mjs` | 旧 / 新表、完成状态、缓存拆分、SQLite 数值转换与用量 id 去重 |
-| `rust/crates/ccusage-core/src/utils.rs`、`model_aliases.rs` | `compat.mjs`、`aggregate.mjs` | 总量补差、配置别名、四项和与记录总量的区别 |
+| `rust/crates/ccusage-core/src/pricing.rs` | `src/pricing/map.mjs`、`keys.mjs`、`deepseek.mjs`、`aliases.mjs` | 价格表加载、models.dev 认领规则与 exactOnly、模糊匹配与边界、内置价格、长上下文档、DeepSeek V4 时段价、fast 倍率 |
+| `rust/crates/ccusage-core/build.rs` + `flake.lock` | `src/pricing/snapshot.mjs`（`scripts/pricing-snapshot.mjs` 生成） | 内嵌快照直接取 build.rs 产物，LiteLLM 锁定 `4b368bf0669cfd3268b780eea6c69497b9a51850` |
+| serde_json 1.0.151（运行期无 `float_roundtrip`） | `src/pricing/serde-json.mjs` | 价格 JSON 按 serde 的非正确舍入浮点算法与类型规则解码 |
+| `rust/crates/ccusage-core/src/cost.rs` | `src/pricing/cost.mjs` | 5m / 1h 缓存、两段式与边际分档、fast 倍率、费用模式、缺价判定 |
+| `rust/adapters/codex/src/aggregate.rs`、`report.rs`、`speed.rs`、`parser.rs` | `src/pricing/codex.mjs`、`src/cost.mjs`、`src/adapters/codex.mjs` | 按日分组、按请求判长上下文、时间戳分桶、服务档位记录与合并、config.toml 档位 |
+| `rust/adapters/claude/src/daily.rs` | `src/adapters/claude.mjs`、`src/rows.mjs` | 去重前计价（替换规则比较算出的费用）、日累加顺序 |
+| `rust/adapters/zcode/src/loader.rs`、`parser.rs` | `src/adapters/zcode.mjs`、`src/cost.mjs` | provider 决定是否计价、Z.ai 缓存写入按输入价、按时间稳定排序 |
+| `rust/crates/ccusage-core/src/summary.rs`、`output.rs` | `src/rows.mjs`、`src/report.mjs` | UsageAccumulator、json_float、数字 / 货币 / 模型名格式 |
+| `rust/crates/ccusage-adapter-all/src/report.rs`、`types.rs`、`loader.rs` | `src/report.mjs`、`src/report/aggregate.mjs` | 统一日报 JSON、AllAccumulator、表格行与 Total、检测到的来源 |
+| `rust/crates/ccusage-terminal/src/*` | `src/report/table.mjs`、`terminal.mjs`、`unicode-width.mjs` | 列宽与终端适配、换行截断、ANSI、标题框、unicode-width 0.2.2 字符宽度 |
 
-上游代码均为 MIT，版权与完整许可保留在仓库和打包产物中。
+上游代码与数据均为 MIT，版权与许可保留在仓库和打包产物中。
 
-## 固定样本：126 项真实上游输出
+## 固定样本：147 项真实 ccusage 输出
 
-`test/cases.mjs` 定义 42 组人工脱敏场景，每组运行 `UTC`、`Asia/Shanghai`、`America/New_York` 三个时区。`scripts/oracle.mjs` 对同一份输入运行真实 ccusage 与 usagelet，比较完整记录集合和全局总量；`test/golden.json` 保存 ccusage 的真实预期，常规测试不依赖本机安装 ccusage。
+`test/cases.mjs` 定义 49 组人工脱敏场景，每组运行 `UTC`、`Asia/Shanghai`、`America/New_York` 三个时区。`scripts/oracle.mjs` 对同一份输入运行真实 ccusage 与 usagelet，每项比较 by-agent JSON、普通 JSON、120 列无颜色表格（stdout 与 stderr）三份文本；设了 `costModes` 的场景另比较 `--mode calculate` / `--mode display` 的 JSON。预期文本存于 `test/golden.json.gz`，常规测试同时核对源码版与打包版，不依赖本机安装 ccusage。
 
-覆盖 Claude 侧链与嵌套会话、缺 id / requestId、advisor、无模型记录、详细 TTL 桶、fast / 用户别名、无效字段 / null / 重复字段 / 非整数字面量；Codex 累计重置、缺模型回退、auto-review 发布边界、headless 多格式、字符串计数、缓存钳制、跨文件 / 别名后的重复、活动与归档优先、父日志缺失 / 不匹配、分叉截止、压缩及独立 compaction 的基线排除规则；ZCode 旧表、补输出 / 额外总量、负数 / 小数转换、缺 `model_usage` 表或必需列时跳过该库而保留 Claude 结果；以及混合来源和多个主目录。
+v0.2 的 42 组覆盖 Claude 侧链 / 嵌套会话 / advisor / TTL 桶 / 别名 / 字段校验，Codex 累计重置 / 回退模型 / auto-review / headless / 去重 / 分叉 / compaction 排除，ZCode 旧表 / 补差 / 数值转换 / 跳过坏库，混合来源与多根目录。v0.3 新增 7 组费用场景：fast 倍率 + 1h 缓存 + 记录费用（三种费用模式）、边际分档与两段式长上下文、DeepSeek V4 生效期 / 高峰 / 周末、Codex 服务档位切换与无法识别的档位、config.toml 默认 fast、ZCode 各类 provider、别名与缺价模型。
 
-结果：**126 项直接对比零差异**。测试过程中发现并修正了 ZCode SQLite 实际按整数读取时截断小数的语义差异。
+结果：**147 项全部逐字节相同**。
 
-另保留 18 项扩展模式、压缩读取、损坏数据和单文件分发测试，以及 7 项 v0.2.1 回归修复测试。共 **151 项测试通过**。
+## 本机真实日志
 
-## 冻结本机日志：六组直接比较（v0.2.0）
+`scripts/compare.mjs`（`npm run compare`）用打包产物读取本机实时日志，与 ccusage 同参数输出逐字节比较（只比较 ccusage 也支持的三个来源）：
 
-为避免活跃会话在两次采集之间增长，先在本机临时目录冻结日志：只复制日志文件，ZCode 使用 SQLite 只读连接的 backup API 建立一致性副本。未复制或读取凭据。两边均从这份快照读取，快照不提交、不上传，完成后删除。
+| 时区 / 范围 | 比较项 | 差异 |
+|---|---:|---:|
+| Asia/Shanghai、UTC、America/New_York，全量 | 94（每个时区 3 份 JSON + 7 种宽度 × 4 种表格，另加命令行 JSON 一项） | 0 |
+| Asia/Shanghai，`--since 20260915 --until 20261017`，80 / 120 列 | 12 | 0 |
 
-快照包含 Claude 416 个普通日志、Codex 23 个普通日志和 ZCode 的一个数据库。基线不读取压缩归档，因此本次契约范围内不复制压缩文件。这是两边一致的数据发现规则，不是比较后过滤差异。
+此时数据为 Claude 425 个日志（去重后 47,462 条）、Codex 24 个（769 条）、ZCode 一个数据库（7,460 条），全量 75 天，总费用 `5316.747708350002` 与 ccusage 完全相同。每个时区采集约 6.5 秒；不是跨机器的性能承诺。
 
-| 时区 | 范围 | 天数 | 比较记录数（不含全局总计） | 差异 |
-|---|---|---:|---:|---:|
-| UTC | 全量 | 72 | 324 | 0 |
-| Asia/Shanghai | 全量 | 75 | 338 | 0 |
-| America/New_York | 全量 | 73 | 321 | 0 |
-| UTC | 2026-09-01 至 2026-10-01 | 31 | 163 | 0 |
-| Asia/Shanghai | 同上 | 31 | 169 | 0 |
-| America/New_York | 同上 | 31 | 161 | 0 |
+## DeepSeek Harness
 
-冻结时 Claude 去重后 46,646 条、Codex 730 条、ZCode 7,460 条。源码模块版每组采集约 6–7 秒；不是跨机器的性能承诺。日、来源及模型行之外，最终检查还包含全局四项与总 token。
+口径来源：`@deepseek-ai/dsh-token-meter` 的 tokenUsage 投影（usage-projection.js）、`dsh-session` 的分叉继承（`buildForkSeed`、`inheritedEventCount`）、`dsh-session-persistence-jsonl` 的代际选择与残帧规则、`dsh-session-format-v0-to-v1` / `v1-to-v2` 的历史流式块归组。本机桌面版为 0.2.1-rc.2，样本取自 deepseek-harness 提交 [`687f282e8625c6b8d11ff58211a90524be2e4317`](https://github.com/deepseek-ai/deepseek-harness/commit/687f282e8625c6b8d11ff58211a90524be2e4317)。
 
-## v0.2.1 回归修复
+核对方式都是“DSH 自己的代码算一遍、usagelet 算一遍”：用 `dsh-session-format-catalog` 把日志还原成当前格式，再用 tokenUsage 投影折叠。
 
-v0.2.0 回归测试发现的偏差，逐项修复并补测试（`test/regression.test.mjs`，ZCode 场景另进固定样本）：
+| 验证 | 规模 | 差异 |
+|---|---|---:|
+| 仓库快照样本（补回 seq / time 信封后能被官方目录还原的全部） | 647 个会话：v0 14、v1 1、v2 152、v3 216、v4 264；578 个有用量，含重试 / 失败尝试、v0/v1 打包流式块、6 个继承了父会话用量的分叉子会话、10 个压缩摘要 | 0 |
+| 同一批样本改写成拼接 Zstd 帧 | 647 | 0 |
+| 按 DSH 目录结构摆放、多代际同目录，跑完整发现 + 去重 + 汇总 | 281 个会话（未压缩与压缩各一遍），总量与官方逐项相同 | 0 |
+| 随机事件序列（含非法顺序、缺用量、部分缓存字段、重试与替换） | 5,000 组，对比官方折叠函数 | 0 |
+| 本机真实会话 | 与 DSH 写下的投影缓存（tokenUsage）逐项相同 | 0 |
 
-| 问题 | 修复 |
-|---|---|
-| ZCode 库缺 `model_usage` 表或必需列时整次运行退出 1，Claude / Codex 结果全部丢失；ccusage 同场景正常输出 | 按上游 `rust/adapters/zcode/src/loader.rs`：打不开、结构不符、查询失败都只跳过该库（逐行读取中断保留已读部分）。上游只写调试日志，usagelet 另记 `zcode_schema` / `zcode_unreadable` 警告。扩展模式同样处理 |
-| `collect()` 不校验日期，`since: '20260915'` 静默返回 0 天且 `complete: true` | 日期规范化与校验从 `cli.mjs` 移到 `collect()`，库与命令行一致 |
-| 默认模式 `--agent deepseek` 仍标 `compatibility: ccusage@20.0.21` | 选中契约外来源时 `compatibility` 为 `null` |
-| `--source zcode=<目录>` 只报 `disk I/O error` | 直接报错，带路径并提示要指向 `db.sqlite` 文件 |
-| `--agent claude,` 报「未知来源 」 | `--agent` 去掉空白与空项，全空时报缺少值 |
-| README 称会提示已发现的 JSON 问题 | 改为如实说明：默认模式 Claude 只解析含 `"usage":{` 的行，其他损坏行不提示 |
+仓库里放了其中 17 个代表性样本（`test/fixtures/dsh/`，MIT）及官方算出的预期值，`npm test` 每次核对；`npm run test:dsh` 用本机桌面版自带代码重新生成预期值。
 
-修复后用打包产物（`--bundle`）对本机实时日志直接比较，截至前一天以避免当日会话增长：
-
-| 时区 | 范围 | 天数 | 比较记录数 | 差异 |
-|---|---|---:|---:|---:|
-| Asia/Shanghai | 全量至 2026-10-17 | 74 | 332 | 0 |
-| UTC | 同上 | 72 | 325 | 0 |
-| America/New_York | 同上 | 73 | 322 | 0 |
-| Asia/Shanghai | `--since 20260915 --until 20261017` | 29 | 163 | 0 |
-
-此时 Claude 418 个日志、Codex 23 个、ZCode 一个数据库。v0.2.1 构建产物已发布为 `ahhtou.wang/dl/usagelet-0.2.1.mjs`（SHA-256 `7ca66695735e4bd6f2c1d1016deb1f2ee310dc9adde0bb344a08bf76effc472b`），下载后与本地构建逐字节一致。
+不计入的部分：会话标题、联网搜索等辅助 LLM 请求在日志里没有用量记录；压缩摘要请求有用量但 DSH 的 tokenUsage 不计，只在 `--extended` 下计入。
 
 ## 打包与平台边界
 
-`npm run build` 将模块打包为单个 `dist/usagelet.mjs`，不复制 node_modules 或 JSON 文件到使用端。在干净目录只放打包后的 JS 即可执行；生成独立 SHA-256 清单。
+`npm run build` 将模块打包为单个 `dist/usagelet.mjs`（约 240 KB，含 deflate 压缩的价格快照），不复制 node_modules 或 JSON 文件到使用端，并生成独立 SHA-256 清单。
 
-目前仅 macOS arm64、Node.js 22.23.2 实测。上述结论代表固定版本、已覆盖样本和冻结本机数据的验证结果，不是对未来日志格式或任意平台的无条件承诺。异常时应保留诊断，不静默宣称对齐。
-
-DeepSeek 保留原有扩展适配，参考提交 [`687f282e8625c6b8d11ff58211a90524be2e4317`](https://github.com/deepseek-ai/deepseek-harness/commit/687f282e8625c6b8d11ff58211a90524be2e4317)。此前已用官方解码器独立复核 257 帧 / 52 条用量；它不纳入 ccusage 三来源兼容契约。Qoder 暂缓。
-
-本次没有替换线上同步链路、修改线上用量、用户、令牌或配置，仅发布静态构建产物。
+目前仅 macOS arm64、Node.js 22.23.2 实测。上述结论代表固定版本、已覆盖样本与本机数据的验证结果，不是对未来日志格式或任意平台的无条件承诺。线上同步链路尚未切换，未改动线上统计数据。

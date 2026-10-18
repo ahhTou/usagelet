@@ -6,7 +6,8 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync, spawnSync } from 'node:child_process';
 import { zstdCompressSync } from 'node:zlib';
-import { collect, aggregate, VERSION } from '../src/index.mjs';
+import { collect, VERSION } from '../src/index.mjs';
+import { summarizeDaily, dayFormatter } from '../src/rows.mjs';
 const script = fileURLToPath(new URL('../dist/usagelet.mjs', import.meta.url));
 async function fixture(t) {
   const home = await mkdtemp(join(tmpdir(), 'usagelet-test-'));
@@ -54,6 +55,7 @@ const raw = (i, o = 2, cached = 4) => ({
   cached_input_tokens: cached,
 });
 const breakdown = (data) => data.daily.flatMap((d) => d.agents.flatMap((a) => a.modelBreakdowns));
+const records = (data) => data.metadata.sources.reduce((n, s) => n + s.records, 0);
 
 test('Claude 流式快照、跨文件重复和跨时区日期只计一次', async (t) => {
   const options = await fixture(t),
@@ -64,7 +66,7 @@ test('Claude 流式快照、跨文件重复和跨时区日期只计一次', asyn
   assert.equal(data.daily[0].period, '2026-10-18');
   assert.equal(data.totals.inputTokens, 30);
   assert.equal(data.totals.outputTokens, 11);
-  assert.equal(data.totals.records, 2);
+  assert.equal(records(data), 2);
   assert.equal(data.metadata.complete, true);
 });
 test('Codex 累计差分、重复快照、模型切换与缓存互斥', async (t) => {
@@ -98,7 +100,7 @@ test('普通和压缩日志副本不双算，压缩归档正常读取', async (t
   );
   const data = await collect(options);
   assert.equal(data.totals.inputTokens, 22);
-  assert.equal(data.totals.records, 2);
+  assert.equal(records(data), 2);
 });
 test('Codex 同身份归档、分支重放历史不重复累计', async (t) => {
   const options = await fixture(t),
@@ -114,7 +116,7 @@ test('Codex 同身份归档、分支重放历史不重复累计', async (t) => {
   ]);
   const data = await collect(options);
   assert.equal(data.totals.inputTokens, 22);
-  assert.equal(data.totals.records, 2);
+  assert.equal(records(data), 2);
 });
 test('Codex remote compaction 计入，已被累计快照覆盖的 local compaction 不重复计入', async (t) => {
   const options = await fixture(t),
@@ -136,7 +138,7 @@ test('Codex remote compaction 计入，已被累计快照覆盖的 local compact
     marker('remote'),
   ]);
   const data = await collect(options);
-  assert.equal(data.totals.records, 3);
+  assert.equal(records(data), 3);
   assert.equal(data.totals.inputTokens, 68);
 });
 test('ZCode 只读 SQLite，过滤未完成请求并移除重复缓存计数', async (t) => {
@@ -162,7 +164,10 @@ test('DeepSeek v4 压缩、最高代际、stream usage、同一步替换、重�
   const options = await fixture(t),
     base = join(options.home, '.dsh/sessions/project/session-a');
   const header = { type: 'session', version: 4, id: 'a' };
-  const route = { type: 'request/header', data: { model: 'deepseek-test' } };
+  const route = {
+    type: 'request/header',
+    data: { header: { config: { provider: 'p', model: 'deepseek-test' } } },
+  };
   const settle = (seq, n, type = 'assistant/message') => ({
     type,
     seq,
@@ -201,20 +206,22 @@ test('DeepSeek v4 压缩、最高代际、stream usage、同一步替换、重�
   const data = await collect(options);
   assert.equal(data.totals.inputTokens, 50);
   assert.equal(data.totals.cacheReadTokens, 6);
-  assert.equal(data.totals.records, 2);
+  assert.equal(records(data), 2);
   assert.equal(data.metadata.complete, true);
 });
-test('缺失字段保留 null 与已知和；坏 JSON 显式警告', async (t) => {
+test('扩展口径下未报告的计数按 0 计入并告警；坏 JSON 显式警告', async (t) => {
   const options = await fixture(t),
     row = claude('a');
   delete row.message.usage.cache_creation_input_tokens;
   await log(join(options.home, '.claude/projects/a.jsonl'), [row, '{"usage": nope']);
   const data = await collect(options);
-  assert.equal(data.totals.cacheCreationTokens, null);
-  assert.equal(data.totals.totalTokens, null);
-  assert.equal(data.totals.knownTokens.inputTokens, 10);
+  assert.equal(data.totals.cacheCreationTokens, 0);
+  assert.equal(data.totals.inputTokens, 10);
   assert.equal(data.metadata.complete, false);
-  assert.equal(data.metadata.warnings[0].code, 'invalid_json');
+  assert.deepEqual(data.metadata.warnings.map((w) => w.code).sort(), [
+    'extended_missing_fields',
+    'invalid_json',
+  ]);
 });
 test('日期过滤不改变前置累计基线', async (t) => {
   const options = await fixture(t),
@@ -229,14 +236,16 @@ test('日期过滤不改变前置累计基线', async (t) => {
   assert.equal(data.totals.inputTokens, 20);
   assert.equal(data.daily.length, 1);
 });
-test('明确错误路径、未知来源和不支持版本不能静默成功', async (t) => {
+test('明确错误路径、未知来源报错；未知 DSH 版本告警而不是静默成功', async (t) => {
   const options = await fixture(t);
   await assert.rejects(collect({ ...options, sources: { claude: ['/does-not-exist'] } }), /不存在/);
   await assert.rejects(collect({ ...options, agents: ['qoder'] }), /暂缓/);
-  await log(join(options.home, '.dsh/sessions/session.v99.jsonl'), [
-    { type: 'session', version: 99 },
+  await log(join(options.home, '.dsh/sessions/p/s/session.v99.jsonl'), [
+    { type: 'session', version: 99, id: 'future' },
   ]);
-  await assert.rejects(collect(options), /不支持/);
+  const data = await collect(options);
+  assert.equal(data.metadata.complete, false);
+  assert.ok(data.metadata.warnings.some((w) => w.code === 'dsh_untested_version'));
 });
 test('单个文件在干净目录运行，无 package.json 或 node_modules', async (t) => {
   const options = await fixture(t),
@@ -257,47 +266,59 @@ test('单个文件在干净目录运行，无 package.json 或 node_modules', as
       encoding: 'utf8',
     }),
   );
-  assert.equal(result.metadata.version, VERSION);
-  assert.equal(result.daily.length, 0);
+  assert.deepEqual(result.daily, []);
+  assert.equal(result.totals.totalTokens, 0);
+  assert.equal(
+    execFileSync(process.execPath, [target, '--version'], { encoding: 'utf8' }).trim(),
+    VERSION,
+  );
   assert.equal(spawnSync(process.execPath, [target, '--since', '2026-02-30']).status, 1);
 });
-test('聚合拒绝安全整数溢出', () => {
+test('汇总拒绝安全整数溢出', () => {
   const row = {
-    agent: 'claude',
     model: 'x',
     timestamp,
     inputTokens: Number.MAX_SAFE_INTEGER,
     outputTokens: 0,
     cacheCreationTokens: 0,
     cacheReadTokens: 0,
+    cost: 0,
   };
-  assert.throws(() => aggregate([row, row]), /安全整数/);
+  assert.throws(
+    () => summarizeDaily([row, row], { day: dayFormatter('UTC'), aliases: {} }),
+    /安全整数/,
+  );
 });
 
-test('DeepSeek 多 Zstd 帧完整解码，损坏与截断文件明确失败', async (t) => {
+test('DeepSeek 多 Zstd 帧完整解码；截断末帧按 DSH 规则忽略，损坏文件告警', async (t) => {
   const options = await fixture(t),
-    file = join(options.home, '.dsh/sessions/session.v4.jsonl.zstd');
+    file = join(options.home, '.dsh/sessions/p/dsh-a/session.v4.jsonl.zstd');
   await mkdir(join(file, '..'), { recursive: true });
-  const header = { type: 'session', id: 'dsh-a', version: 4 };
-  const message = {
+  const header = { type: 'session', id: 'dsh-a', version: 4, createdAt: 1, isSeeded: false };
+  const message = (seq, n) => ({
     type: 'assistant/message',
+    seq,
     time: Date.parse(timestamp),
     data: {
       turn: 1,
-      step: 0,
-      message: { source: { model: 'dsh-test' } },
-      usage: { inputTokens: 7, outputTokens: 3, cacheReadTokens: 0, cacheWriteTokens: 0 },
+      step: seq + 1,
+      message: { source: { provider: 'p', model: 'dsh-test' } },
+      usage: { inputTokens: n, outputTokens: 3, cacheReadTokens: 0, cacheWriteTokens: 0 },
     },
-  };
-  const zipped = Buffer.concat(
-    [header, message].map((x) => zstdCompressSync(Buffer.from(JSON.stringify(x) + '\n'))),
+  });
+  const frames = [header, message(0, 7), message(1, 9)].map((x) =>
+    zstdCompressSync(Buffer.from(JSON.stringify(x) + '\n')),
   );
-  await writeFile(file, zipped);
-  assert.equal((await collect(options)).totals.totalTokens, 10);
-  await writeFile(file, zipped.subarray(0, zipped.length - 2));
-  await assert.rejects(collect(options), /不完整/);
+  await writeFile(file, Buffer.concat(frames));
+  assert.equal((await collect(options)).totals.totalTokens, 22);
+  await writeFile(file, Buffer.concat([frames[0], frames[1], frames[2].subarray(0, 5)]));
+  let data = await collect(options);
+  assert.equal(data.totals.totalTokens, 10);
+  assert.equal(data.metadata.complete, true);
   await writeFile(file, Buffer.from('invalid compressed file'));
-  await assert.rejects(collect(options), /损坏/);
+  data = await collect(options);
+  assert.equal(data.metadata.complete, false);
+  assert.ok(data.metadata.warnings.some((w) => /^dsh_/.test(w.code)));
 });
 
 test('Claude 详细 TTL 写缓存优先，advisor 单独归属，侧链重放不重复', async (t) => {
@@ -323,7 +344,7 @@ test('Claude 详细 TTL 写缓存优先，advisor 单独归属，侧链重放不
   await log(join(options.home, '.claude/projects/a.jsonl'), [sidechain, row]);
   const data = await collect(options);
   assert.equal(data.totals.cacheCreationTokens, 30);
-  assert.equal(data.totals.records, 2);
+  assert.equal(records(data), 2);
   assert.equal(breakdown(data).find((x) => x.modelName === 'advisor-test').outputTokens, 2);
 });
 test('不同会话复用同一 Claude message id 时保持隔离', async (t) => {
@@ -332,7 +353,7 @@ test('不同会话复用同一 Claude message id 时保持隔离', async (t) => 
     b = claude('a');
   b.sessionId = 'other';
   await log(join(options.home, '.claude/projects/a.jsonl'), [a, b]);
-  assert.equal((await collect(options)).totals.records, 2);
+  assert.equal(records(await collect(options)), 2);
 });
 test('Codex compaction 标记先出现时，随后覆盖它的累计事件也不重复', async (t) => {
   const options = await fixture(t);
@@ -347,7 +368,7 @@ test('Codex compaction 标记先出现时，随后覆盖它的累计事件也不
     { type: 'compacted', payload: { compaction_response_id: 'c' } },
     token(raw(10), raw(10)),
   ]);
-  assert.equal((await collect(options)).totals.records, 1);
+  assert.equal(records(await collect(options)), 1);
 });
 test('缺失 Codex 父会话标记不完整，未确认的模型不会猜测为某个 GPT 版本', async (t) => {
   const options = await fixture(t);
@@ -365,7 +386,7 @@ test('缺失 Codex 父会话标记不完整，未确认的模型不会猜测为�
 });
 test('DeepSeek 种子历史不可静默当作完整数据', async (t) => {
   const options = await fixture(t);
-  await log(join(options.home, '.dsh/sessions/session.v4.jsonl'), [
+  await log(join(options.home, '.dsh/sessions/p/seed/session.v4.jsonl'), [
     { type: 'session', id: 'seed', version: 4, isSeeded: true },
   ]);
   assert.equal((await collect(options)).metadata.complete, false);

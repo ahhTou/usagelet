@@ -1,7 +1,8 @@
 import { basename, sep } from 'node:path';
 import { records } from '../io.mjs';
 import { validCount, sum, BUCKETS } from '../shared.mjs';
-import { alias, strictTimestamp } from '../compat.mjs';
+import { strictTimestamp } from '../compat.mjs';
+import { usageCost } from '../cost.mjs';
 
 const FORBIDDEN_NULL = new Set([
   'id',
@@ -45,6 +46,24 @@ function usage(u) {
     outputTokens: u.output_tokens,
     cacheCreationTokens: write,
     cacheReadTokens: u.cache_read_input_tokens ?? 0,
+  };
+}
+// ccusage 的 TokenUsageRaw：缺省计数为 0，cache_creation 明细按 5m / 1h 分别计价。
+function rawUsage(u) {
+  const c = u.cache_creation;
+  return {
+    input_tokens: u.input_tokens,
+    output_tokens: u.output_tokens,
+    cache_creation_input_tokens: u.cache_creation_input_tokens ?? 0,
+    cache_read_input_tokens: u.cache_read_input_tokens ?? 0,
+    speed: u.speed ?? undefined,
+    cache_creation:
+      c && typeof c === 'object'
+        ? {
+            ephemeral_5m_input_tokens: c.ephemeral_5m_input_tokens ?? 0,
+            ephemeral_1h_input_tokens: c.ephemeral_1h_input_tokens ?? 0,
+          }
+        : undefined,
   };
 }
 function pathSession(file) {
@@ -114,26 +133,32 @@ export async function claude(files, ctx) {
       const main = usage(r.message.usage);
       if (!main) continue;
       const m = r.message,
-        session = r.sessionId ?? pathSession(file);
+        session = r.sessionId ?? pathSession(file),
+        at = Date.parse(strictTimestamp(r.timestamp));
       const base = {
         timestamp: r.timestamp,
         agent: 'claude',
         session,
         request: r.requestId,
         sidechain: !!r.isSidechain,
-        cost: r.costUSD ?? 0,
-        speed: m.usage.speed,
       };
+      // 费用在去重之前算：ccusage 的替换规则在 token 相同时比较的是算出的费用。
+      const priced = usageCost(ctx, {
+        model: m.model,
+        usage: rawUsage(m.usage),
+        costUSD: r.costUSD,
+        timestamp: at,
+      });
       insert({
         ...base,
         ...main,
+        ...priced,
+        speed: m.usage.speed,
+        // 展示名在汇总时再解析别名；fast 模式追加 -fast，与 ccusage 一致。
         model:
-          m.model === '<synthetic>'
+          m.model === '<synthetic>' || !m.model
             ? null
-            : alias(
-                m.model ? m.model + (m.usage.speed === 'fast' ? '-fast' : '') : null,
-                ctx.aliases,
-              ),
+            : m.model + (m.usage.speed === 'fast' ? '-fast' : ''),
         id: m.id,
       });
       let index = 0;
@@ -156,7 +181,14 @@ export async function claude(files, ctx) {
         insert({
           ...base,
           ...parsed,
-          model: alias(u.model, ctx.aliases),
+          ...usageCost(ctx, {
+            model: u.model,
+            usage: rawUsage(u),
+            costUSD: undefined,
+            timestamp: at,
+          }),
+          speed: u.speed,
+          model: u.model,
           id: m.id ? `${m.id}:advisor:${index}` : undefined,
         });
         index++;
