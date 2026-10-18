@@ -9,8 +9,8 @@
 ## 下载与运行
 
 ```bash
-curl -fL https://ahhtou.wang/dl/usagelet-0.2.1.mjs -o usagelet.mjs
-curl -fL https://ahhtou.wang/dl/usagelet-0.2.1.mjs.sha256 -o usagelet.mjs.sha256
+curl -fL https://ahhtou.wang/pub/usagelet-0.2.1.mjs -o usagelet.mjs
+curl -fL https://ahhtou.wang/pub/usagelet-0.2.1.mjs.sha256 -o usagelet.mjs.sha256
 shasum -a 256 -c usagelet.mjs.sha256
 node usagelet.mjs daily
 node usagelet.mjs daily --json --by-agent -z Asia/Shanghai > usage.json
