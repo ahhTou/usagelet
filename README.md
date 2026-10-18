@@ -8,11 +8,9 @@
 
 ## 下载与运行
 
-站点目前仍是 v0.2.0 构建；v0.2.1 的回归修复（见 [VALIDATION.md](VALIDATION.md#v021-回归修复)）尚未发布，需要时从源码 `npm run build` 得到 `dist/usagelet.mjs`。
-
 ```bash
-curl -fL https://ahhtou.wang/dl/usagelet-0.2.0.mjs -o usagelet.mjs
-curl -fL https://ahhtou.wang/dl/usagelet-0.2.0.mjs.sha256 -o usagelet.mjs.sha256
+curl -fL https://ahhtou.wang/dl/usagelet-0.2.1.mjs -o usagelet.mjs
+curl -fL https://ahhtou.wang/dl/usagelet-0.2.1.mjs.sha256 -o usagelet.mjs.sha256
 shasum -a 256 -c usagelet.mjs.sha256
 node usagelet.mjs daily
 node usagelet.mjs daily --json --tz Asia/Shanghai > usage.json

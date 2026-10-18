@@ -75,7 +75,7 @@ v0.2.0 回归测试发现的偏差，逐项修复并补测试（`test/regression
 | America/New_York | 同上 | 73 | 322 | 0 |
 | Asia/Shanghai | `--since 20260915 --until 20261017` | 29 | 163 | 0 |
 
-此时 Claude 418 个日志、Codex 23 个、ZCode 一个数据库。
+此时 Claude 418 个日志、Codex 23 个、ZCode 一个数据库。v0.2.1 构建产物已发布为 `ahhtou.wang/dl/usagelet-0.2.1.mjs`（SHA-256 `7ca66695735e4bd6f2c1d1016deb1f2ee310dc9adde0bb344a08bf76effc472b`），下载后与本地构建逐字节一致。
 
 ## 打包与平台边界
 
