@@ -9,14 +9,14 @@
 ## 下载与运行
 
 ```bash
-curl -fL https://ahhtou.wang/pub/usagelet-0.2.1.mjs -o usagelet.mjs
-curl -fL https://ahhtou.wang/pub/usagelet-0.2.1.mjs.sha256 -o usagelet.mjs.sha256
+curl -fL https://ahhtou.wang/pub/usagelet-0.3.0.mjs -o usagelet.mjs
+curl -fL https://ahhtou.wang/pub/usagelet-0.3.0.mjs.sha256 -o usagelet.mjs.sha256
 shasum -a 256 -c usagelet.mjs.sha256
 node usagelet.mjs daily
 node usagelet.mjs daily --json --by-agent -z Asia/Shanghai > usage.json
 ```
 
-站点目前提供的是 v0.2.1（旧输出格式）；v0.3.0 尚未发布，可在仓库里 `npm run build` 后使用 `dist/usagelet.mjs`。
+站点提供 v0.3.0（与本仓库 `npm run build` 产物 sha256 一致）；旧版 0.1.0 ~ 0.2.1 仍在 `/pub/` 下。
 
 脚本只离线读取会话日志与用量表，不读取账号凭据、不联网、不上传数据。
 

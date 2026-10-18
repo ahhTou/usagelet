@@ -68,4 +68,4 @@
 
 ## 当前进度
 
-v0.3.0 按模块维护源码，构建为单个 JS。默认统计 Claude Code、Codex、ZCode、DeepSeek Harness：前三个的 JSON、表格与费用和 ccusage 20.0.21 逐字节一致（49 组固定样本 × 3 时区共 147 项、本机真实日志 106 项对照均零差异）；DSH 按 DSH 官方 tokenUsage 口径，用 DSH 自带代码核对 647 个样本零差异。连同扩展、回归与定价单测共 207 项测试通过。v0.3.0 尚未发布到站点（站点为 v0.2.1），Qoder 暂缓，其他平台及线上同步切换尚未完成。详见 VALIDATION.md，不将固定基线验收扩大为未来版本或任意数据的无条件保证。
+v0.3.0 按模块维护源码，构建为单个 JS。默认统计 Claude Code、Codex、ZCode、DeepSeek Harness：前三个的 JSON、表格与费用和 ccusage 20.0.21 逐字节一致（49 组固定样本 × 3 时区共 147 项、本机真实日志 106 项对照均零差异）；DSH 按 DSH 官方 tokenUsage 口径，用 DSH 自带代码核对 647 个样本零差异。连同扩展、回归与定价单测共 207 项测试通过。v0.3.0 已发布到站点 `/pub/usagelet-0.3.0.mjs`，ahhtou.wang 同步弹窗的「一键同步 [Beta]」用它（2026-10-18 本机首次真实同步成功），Qoder 暂缓，其他平台尚未验证。详见 VALIDATION.md，不将固定基线验收扩大为未来版本或任意数据的无条件保证。
