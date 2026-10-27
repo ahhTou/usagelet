@@ -3,7 +3,7 @@
   "version": "0.3.0",
   "private": true,
   "type": "module",
-  "description": "模块化开发、单文件分发的 Agent 用量统计工具，输出与 ccusage 一致",
+  "description": "本机 AI Agent 用量统计 CLI，支持 Claude Code、Codex、ZCode、DeepSeek Harness，输出与 ccusage 20.0.21 一致，单文件分发",
   "engines": {
     "node": ">=22.16.0"
   },

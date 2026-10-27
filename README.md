@@ -2,9 +2,24 @@
 
 > 开发中 · 2026-10-18 · v0.3.0
 
-本机 Agent 用量统计，**输出与 [ccusage](https://github.com/ccusage/ccusage) 20.0.21 逐字节一致**（JSON、终端表格、费用），另外完整支持 DeepSeek Harness（DSH）。源码按模块维护，打包为单个 `usagelet.mjs`；使用端无需安装 npm 包或构建工具。
+本机 AI Agent 用量统计，支持 **Claude Code、Codex、ZCode 与 DeepSeek Harness（DSH）**。JSON、终端表格与费用和 [ccusage](https://github.com/ccusage/ccusage) 20.0.21 **逐字节一致**；DSH 按官方口径统计。源码按模块维护，打包为单个 `usagelet.mjs`；使用端无需安装 npm 包或构建工具。
 
 **需要 Node.js >= 22.16（内置 SQLite / Zstd）。目前仅在 macOS arm64、Node.js 22.23.2 验证，其他环境未测试。** Node 22 的 SQLite 可能在 stderr 显示实验性提示。
+
+## 支持的客户端
+
+`来源名` 就是 `--agent` / `--source` 的取值：
+
+| 客户端 | 来源名 | 默认读取位置 | 关键规则 |
+|---|---|---|---|
+| Claude Code | `claude` | `~/.claude/projects`、`~/.config/claude/projects` | 会话隔离、完整快照选择、侧链重放、advisor、TTL 缓存桶、记录费用与 fast 模型名 |
+| Codex | `codex` | `~/.codex/sessions`、`archived_sessions` | 累计差分、跨文件去重、分支 / 重写突发处理、模型回退、按请求判长上下文、服务档位 |
+| ZCode | `zcode` | `~/.zcode/cli/db/db.sqlite` | 只读 SQLite、已完成请求、缓存拆分、计数转换、总量补差、provider 决定是否计价 |
+| DeepSeek Harness | `dsh`（别名 `deepseek`） | `~/.dsh/sessions`（或 `DSH_HOME`） | 对齐 DSH 官方 tokenUsage，支持 v0–v4 格式与分叉去重，见下节 |
+
+- 默认统计全部四个来源，可用 `--agent claude,codex,...` 选择，`--source 来源=路径` 指定日志位置；
+- Codex 的 `.jsonl.zst` 归档与 DSH 压缩摘要只在 `--extended` 下计入；
+- Qoder 于 2026-10-18 明确暂缓接入；ccusage 支持的其他来源暂未实现。
 
 ## 下载与运行
 
@@ -31,14 +46,7 @@ node usagelet.mjs daily --json --by-agent -z Asia/Shanghai > usage.json
 | 费用 | 移植 ccusage 的离线定价：内嵌价格快照就是 ccusage 20.0.21 自己 build.rs 的产物（LiteLLM 锁定版本 + models.dev 快照），模型匹配、长上下文分档、fast 倍率、DeepSeek V4 时段价、Codex 服务档位、ZCode 的 Z.ai 规则全部照搬。结果等同 `ccusage -O`；不联网刷新价格 |
 | 费用模式 | `-m auto`（默认，日志里有记录费用就用记录值）、`calculate`、`display` |
 
-默认统计 Claude Code、Codex、ZCode、DeepSeek Harness 四个来源。前三个与 ccusage 20.0.21（tag `v20.0.21`，提交 `3c5556a775ebcf1e59844d4283c8c5b30529c290`）的统计口径和输出逐字节一致；DSH 是 ccusage 不支持的来源，按 DSH 自己的口径统计（见下）。对比结果见 [VALIDATION.md](VALIDATION.md)。
-
-| 来源 | 默认读取位置 | 关键规则 |
-|---|---|---|
-| Claude Code | `~/.claude/projects`、`~/.config/claude/projects` | 会话隔离、完整快照选择、侧链重放、advisor、TTL 缓存桶、记录费用与 fast 模型名 |
-| Codex | `~/.codex/sessions`、`archived_sessions` | 累计差分、跨文件去重、分支 / 重写突发处理、模型回退、按请求判长上下文、服务档位 |
-| ZCode | `~/.zcode/cli/db/db.sqlite` | 只读 SQLite、已完成请求、缓存拆分、计数转换、总量补差、provider 决定是否计价 |
-| DeepSeek Harness | `~/.dsh/sessions`（或 `DSH_HOME`） | 见下 |
+默认统计上表四个来源。Claude Code、Codex、ZCode 与 ccusage 20.0.21（tag `v20.0.21`，提交 `3c5556a775ebcf1e59844d4283c8c5b30529c290`）的统计口径和输出逐字节一致；DSH 是 ccusage 不支持的来源，按 DSH 自己的口径统计（见下）。对比结果见 [VALIDATION.md](VALIDATION.md)。
 
 ## DeepSeek Harness
 
