@@ -1,10 +1,10 @@
 # usagelet
 
-> 开发中 · 2026-10-18 · v0.3.0
+> 开发中 · 2026-11-23 · v0.4.0
 
-本机 AI Agent 用量统计，支持 **Claude Code、Codex、ZCode 与 DeepSeek Harness（DSH）**。JSON、终端表格与费用和 [ccusage](https://github.com/ccusage/ccusage) 20.0.21 **逐字节一致**；DSH 按官方口径统计。源码按模块维护，打包为单个 `usagelet.mjs`；使用端无需安装 npm 包或构建工具。
+本机 AI Agent 用量统计，支持 **Claude Code、Codex、ZCode、DeepSeek Harness（DSH）和 Antigravity**。统一日报兼容 [ccusage](https://github.com/ccusage/ccusage)。源码按模块维护，打包为单个 `usagelet.mjs`；使用端无需安装 npm 包或构建工具。
 
-**需要 Node.js >= 22.16（内置 SQLite / Zstd）。目前仅在 macOS arm64、Node.js 22.23.2 验证，其他环境未测试。** Node 22 的 SQLite 可能在 stderr 显示实验性提示。
+**需要 Node.js >= 22.16（内置 SQLite / Zstd）。目前仅在 macOS arm64、Node.js 22.23.4 验证，其他环境未测试。** Node 22 的 SQLite 可能在 stderr 显示实验性提示。
 
 ## 支持的客户端
 
@@ -15,23 +15,22 @@
 | Claude Code | `claude` | `~/.claude/projects`、`~/.config/claude/projects` | 会话隔离、完整快照选择、侧链重放、advisor、TTL 缓存桶、记录费用与 fast 模型名 |
 | Codex | `codex` | `~/.codex/sessions`、`archived_sessions` | 累计差分、跨文件去重、分支 / 重写突发处理、模型回退、按请求判长上下文、服务档位 |
 | ZCode | `zcode` | `~/.zcode/cli/db/db.sqlite` | 只读 SQLite、已完成请求、缓存拆分、计数转换、总量补差、provider 决定是否计价 |
+| Antigravity | `antigravity`（别名 `agy`） | `~/.gemini/antigravity*/conversations`、`~/.config/antigravity/conversations` | 只读 SQLite，跨库去重，按请求计费 |
 | DeepSeek Harness | `dsh`（别名 `deepseek`） | `~/.dsh/sessions`（或 `DSH_HOME`） | 对齐 DSH 官方 tokenUsage，支持 v0–v4 格式与分叉去重，见下节 |
 
-- 默认统计全部四个来源，可用 `--agent claude,codex,...` 选择，`--source 来源=路径` 指定日志位置；
+- 默认统计全部五个来源，可用 `--agent claude,codex,...` 选择，`--source 来源=路径` 指定日志位置；
 - Codex 的 `.jsonl.zst` 归档与 DSH 压缩摘要只在 `--extended` 下计入；
 - Qoder 于 2026-10-18 明确暂缓接入；ccusage 支持的其他来源暂未实现。
 
 ## 下载与运行
 
 ```bash
-curl -fL https://ahhtou.wang/pub/usagelet-0.3.0.mjs -o usagelet.mjs
-curl -fL https://ahhtou.wang/pub/usagelet-0.3.0.mjs.sha256 -o usagelet.mjs.sha256
-shasum -a 256 -c usagelet.mjs.sha256
-node usagelet.mjs daily
-node usagelet.mjs daily --json --by-agent -z Asia/Shanghai > usage.json
+curl -fLO https://ahhtou.wang/pub/usagelet-0.4.0.mjs
+curl -fLO https://ahhtou.wang/pub/usagelet-0.4.0.mjs.sha256
+shasum -a 256 -c usagelet-0.4.0.mjs.sha256
+node usagelet-0.4.0.mjs daily
+node usagelet-0.4.0.mjs daily --agent agy --json --by-agent -z Asia/Shanghai
 ```
-
-站点提供 v0.3.0（与本仓库 `npm run build` 产物 sha256 一致）；旧版 0.1.0 ~ 0.2.1 仍在 `/pub/` 下。
 
 脚本只离线读取会话日志与用量表，不读取账号凭据、不联网、不上传数据。
 
@@ -46,7 +45,14 @@ node usagelet.mjs daily --json --by-agent -z Asia/Shanghai > usage.json
 | 费用 | 移植 ccusage 的离线定价：内嵌价格快照就是 ccusage 20.0.21 自己 build.rs 的产物（LiteLLM 锁定版本 + models.dev 快照），模型匹配、长上下文分档、fast 倍率、DeepSeek V4 时段价、Codex 服务档位、ZCode 的 Z.ai 规则全部照搬。结果等同 `ccusage -O`；不联网刷新价格 |
 | 费用模式 | `-m auto`（默认，日志里有记录费用就用记录值）、`calculate`、`display` |
 
-默认统计上表四个来源。Claude Code、Codex、ZCode 与 ccusage 20.0.21（tag `v20.0.21`，提交 `3c5556a775ebcf1e59844d4283c8c5b30529c290`）的统计口径和输出逐字节一致；DSH 是 ccusage 不支持的来源，按 DSH 自己的口径统计（见下）。对比结果见 [VALIDATION.md](VALIDATION.md)。
+Claude Code、Codex、ZCode 的兼容基线是 ccusage 20.0.21（提交 `3c5556a`）。DSH 按 DSH 自己的 tokenUsage 统计。Antigravity 对齐 ccusage 20.0.51 主干提交 `4f1df4ed` 的离线日报。对比结果见 [VALIDATION.md](VALIDATION.md)。
+
+## Antigravity
+
+- `--agent agy` 与 `--agent antigravity` 等价。JSON 中输出 ccusage 使用的 `antigravity`。
+- 默认读取 IDE、CLI、ACP 和备份会话库。用 `ANTIGRAVITY_DATA_DIR` 指定逗号分隔的根目录，或用 `--source agy=路径` 指定目录或单个 `.db`。
+- 使用生成、步骤、关联记录与轨迹的时间戳，合并同一请求，保留实际重试。输出 token 为可见输出，推理 token 计入总量和输出费用。
+- 采用对应上游提交的独立离线价格快照。读取会话库失败会告警，日报继续统计其他会话。
 
 ## DeepSeek Harness
 
@@ -72,10 +78,10 @@ ccusage 同名选项：`-j/--json`、`-s/--since`、`-u/--until`（`YYYY-MM-DD` 
 
 usagelet 选项：
 
-- `--agent claude,codex,zcode,dsh`：选择来源（默认全部）；
+- `--agent claude,codex,zcode,dsh,agy`：选择来源（默认全部）；
 - `--source 来源=路径`：可重复，指定日志目录 / 文件，ZCode 指向 `db.sqlite` 文件本身；
 - `--extended`：扩展口径，额外读 Codex `.jsonl.zst` 归档与独立 compaction、DSH 压缩摘要，保留 v0.1 的读取方式；**不保证与 ccusage 相同**（兼容 v0.2 的 `--mode extended` 写法）；
-- `CLAUDE_CONFIG_DIR`、`XDG_CONFIG_HOME`、`CODEX_HOME`、`ZCODE_HOME`、`DSH_HOME` 均支持，前三个及 `DSH_HOME` 可逗号分隔多个目录。
+- `CLAUDE_CONFIG_DIR`、`XDG_CONFIG_HOME`、`CODEX_HOME`、`ZCODE_HOME`、`DSH_HOME` 均支持，前三个及 `DSH_HOME` 可逗号分隔多个目录；Antigravity 支持 `ANTIGRAVITY_DATA_DIR`。
 
 输出写 stdout，诊断写 stderr。退出码：`0` 完整统计，`2` 有数据质量警告（stderr 列出 `[代码] 来源: 说明`），`1` 参数或读取错误。库接口 `collect()` 返回 `{ metadata, rows, daily, totals, detectedAgents }`，`daily` / `totals` 即 `--json --by-agent` 的内容，`metadata` 含来源状态与警告。
 
@@ -96,7 +102,5 @@ npm run test:dsh    # 用本机 DeepSeek Harness 桌面版自带代码核对 DSH
 - `src/pricing/`：ccusage 离线定价（`snapshot.mjs` 由 `scripts/pricing-snapshot.mjs` 从 ccusage build.rs 产物生成）；
 - `src/report/`、`report.mjs`：ccusage 统一日报的聚合、JSON 与表格；
 - `src/rows.mjs`、`cost.mjs`、`collect.mjs`、`cli.mjs`：日汇总、各来源计费、采集编排与命令行。
-
-现有 `ahhtou.wang` 同步链路尚未切换，也未改动线上统计数据。
 
 协作与开发计划见 [AGENTS.md](AGENTS.md)，`CLAUDE.md` 是其软链接。代码与分发产物保留 [MIT 许可](LICENSE)；内嵌价格数据来自 LiteLLM（MIT）与随 ccusage 源码分发的 models.dev 快照，DSH 测试样本来自 deepseek-harness（MIT，见 `test/fixtures/dsh/`）。

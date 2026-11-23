@@ -1,5 +1,7 @@
-export const VERSION = '0.3.0';
-export const AGENTS = ['claude', 'codex', 'zcode', 'dsh'];
+export const VERSION = '0.4.0';
+export const AGENTS = ['claude', 'codex', 'antigravity', 'zcode', 'dsh'];
+export const normalizeAgent = (agent) =>
+  agent === 'deepseek' ? 'dsh' : agent === 'agy' ? 'antigravity' : agent;
 export const BUCKETS = ['inputTokens', 'outputTokens', 'cacheCreationTokens', 'cacheReadTokens'];
 export const ZERO = () => Object.fromEntries(BUCKETS.map((k) => [k, 0]));
 export const compressed = (p) => /\.jsonl\.(zst|zstd)$/.test(p);

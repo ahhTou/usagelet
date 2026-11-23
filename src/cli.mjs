@@ -1,7 +1,7 @@
 // 命令行：参数与输出对齐 ccusage 20.0.21 的 `ccusage daily`（统一日报）。
 import { resolve } from 'node:path';
 import { collect } from './collect.mjs';
-import { VERSION, AGENTS } from './shared.mjs';
+import { VERSION, AGENTS, normalizeAgent } from './shared.mjs';
 import { reportJson, renderTable } from './report.mjs';
 import { terminalWidth } from './report/terminal.mjs';
 
@@ -26,7 +26,7 @@ ccusage 同名选项：
       --all                  接受但无影响：默认就统计所有检测到的来源
 
 usagelet 选项：
-      --agent <来源>          claude,codex,zcode,dsh，逗号分隔；默认全部（dsh 也可写 deepseek）
+      --agent <来源>          claude,codex,zcode,dsh,antigravity；默认全部（别名：deepseek、agy）
       --source <来源=路径>    指定日志目录 / 文件；ZCode 指向 SQLite 文件；可重复
       --extended             扩展口径：额外读 Codex 压缩归档与独立 compaction、DSH 压缩摘要等，
                              不保证与 ccusage 相同
@@ -141,7 +141,9 @@ export function parseArgs(args) {
         const at = value.indexOf('='),
           agent = normalizeAgent(value.slice(0, at));
         if (at < 1 || !AGENTS.includes(agent) || !value.slice(at + 1))
-          throw new Error('--source 格式为 来源=路径（来源：claude、codex、zcode、dsh）');
+          throw new Error(
+            '--source 格式为 来源=路径（来源：claude、codex、zcode、dsh、antigravity）',
+          );
         (options.sources[agent] ??= []).push(resolve(value.slice(at + 1)));
         break;
       }
@@ -151,8 +153,6 @@ export function parseArgs(args) {
   if (flags['no-compressed']) options.noCompressed = true;
   return { options, flags };
 }
-
-export const normalizeAgent = (agent) => (agent === 'deepseek' ? 'dsh' : agent);
 
 export async function main(args = process.argv.slice(2), io = process) {
   const parsed = parseArgs(args);

@@ -1,6 +1,6 @@
 # usagelet Agent 开发约定与计划
 
-> 2026-10-18 · 状态：开发中，v0.3.0，输出与 ccusage 20.0.21 逐字节一致（含费用），DSH 对齐 DSH 官方口径，模块化源码与单文件构建
+> 2026-11-23 · 状态：开发中，v0.4.0，Antigravity 对齐 ccusage 主干 4f1df4ed
 
 ## 协作约定
 
@@ -24,6 +24,7 @@
 - 使用 TypeScript / JavaScript 按模块开发；用户明确允许构建打包，仅分发产物必须是一个可由 Node.js 执行的 `usagelet.mjs`。不要为了单文件交付强行把源码写在一个文件。
 - Claude Code、Codex、ZCode 默认统计口径与输出必须对齐 ccusage 20.0.21：JSON、终端表格、费用（等同 `ccusage -O`）逐字节一致。改动前读取对应版本源码，运行 `npm test`（固定样本）与 `npm run compare`（本机真实日志）直接比较文本，不能靠比较后改名、排除差异或容差宣称对齐。
 - 内嵌价格快照只能用 `scripts/pricing-snapshot.mjs` 从 ccusage 自己 build.rs 的产物生成，不手改、不另行压缩。
+- Antigravity 对齐 ccusage `4f1df4ed` 的离线日报，定价表取该提交 build.rs 的产物。改动后运行 `CCUSAGE_ANTIGRAVITY_BIN=/绝对路径/ccusage npm test` 对账。
 - DeepSeek Harness 按 DSH 自己的 tokenUsage 投影统计、跨会话只计自有事件；改动 DSH 采集器后运行 `npm run test:dsh` 用 DSH 自带代码核对。
 - 扩展读取压缩历史、额外 compaction、DSH 压缩摘要等行为仅放在显式 `--extended`，不改变默认口径。
 - 使用端无需 npm install、编译或打包；优先只用 Node.js 内置模块，不依赖平台专用可执行文件。
@@ -67,5 +68,7 @@
 - [ ] macOS 验证通过后，再安排 Linux / Windows 测试并据实更新兼容性说明。
 
 ## 当前进度
+
+v0.4.0 默认增加 Antigravity（别名 `agy`）。验证范围和命令见 VALIDATION.md。
 
 v0.3.0 按模块维护源码，构建为单个 JS。默认统计 Claude Code、Codex、ZCode、DeepSeek Harness：前三个的 JSON、表格与费用和 ccusage 20.0.21 逐字节一致（49 组固定样本 × 3 时区共 147 项、本机真实日志 106 项对照均零差异）；DSH 按 DSH 官方 tokenUsage 口径，用 DSH 自带代码核对 647 个样本零差异。连同扩展、回归与定价单测共 207 项测试通过。v0.3.0 已发布到站点 `/pub/usagelet-0.3.0.mjs`，ahhtou.wang 同步弹窗的「一键同步 [Beta]」用它（2026-10-18 本机首次真实同步成功），Qoder 暂缓，其他平台尚未验证。详见 VALIDATION.md，不将固定基线验收扩大为未来版本或任意数据的无条件保证。

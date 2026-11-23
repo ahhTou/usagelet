@@ -1,6 +1,6 @@
 # 兼容性验收
 
-> 2026-10-18 · v0.3.0 · 输出与 ccusage 20.0.21 逐字节一致；DeepSeek Harness 对齐 DSH 官方口径
+> 2026-11-23 · v0.4.0 · 增加 Antigravity 的 ccusage 主干基线
 
 ## 对齐契约
 
@@ -8,9 +8,18 @@
 
 上游版本固定为 tag `v20.0.21`，提交 [`3c5556a775ebcf1e59844d4283c8c5b30529c290`](https://github.com/ccusage/ccusage/tree/v20.0.21)；本机基线程序打印 `ccusage 20.0.21`，对照脚本先检查版本。后续上游升级必须更新契约并重跑对比。比较时不重命名、不过滤、不容差：字符串完全相同才算通过。
 
-**DeepSeek Harness**：ccusage 不支持 DSH。usagelet 按 DSH 自己的 tokenUsage 投影统计，跨会话只计自有事件，并用 DSH 自带代码核对（见下）。DSH 行的 JSON / 表格格式与其他来源相同，Agent 为 `dsh` / `DeepSeek Harness`。
+**DeepSeek Harness**：usagelet 按 DSH 自己的 tokenUsage 投影统计，跨会话只计自有事件，并用 DSH 自带代码核对（见下）。DSH 行的 JSON / 表格格式与其他来源相同，Agent 为 `dsh` / `DeepSeek Harness`。
 
 `--extended` 扩展口径不在契约内。
+
+## Antigravity
+
+基线是本地 ccusage 20.0.51 主干提交 `4f1df4ede08d639ac2d2984875eddd92ac8ccdb3`。采集规则移植自 `rust/adapters/antigravity/src`，定价数据取该提交 `ccusage-pricing-snapshots` 的 build.rs 产物。
+
+- 固定 SQLite 样本覆盖多根目录、备份与符号链接去重、重试镜像、关联时间戳、推理 token、切日和损坏会话库。设 `CCUSAGE_ANTIGRAVITY_BIN=/绝对路径/ccusage` 运行 `npm test` 会直接核对上游输出。
+- 本机可读日志在 UTC、Asia/Shanghai、America/New_York 的 15 组输出与 ccusage 逐字节相同，涵盖 JSON、按来源明细、无价格、120 列普通及紧凑表格。两个工具均报告一个打不开的库并跳过，usagelet 返回 2 表示部分数据缺失。
+- 合成日志的 32 个模型、4 种 provider、3 个账期共 384 项费用与 ccusage 一致。
+- 三个原有来源的 147 项固定对照通过。2026-11-23 的实时对账出现差异，用同样的输入和参数在 v0.3.0 复查也有差异。
 
 ## 源码映射
 

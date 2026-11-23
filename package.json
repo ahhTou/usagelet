@@ -1,9 +1,9 @@
 {
   "name": "usagelet",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "private": true,
   "type": "module",
-  "description": "本机 AI Agent 用量统计 CLI，支持 Claude Code、Codex、ZCode、DeepSeek Harness，输出与 ccusage 20.0.21 一致，单文件分发",
+  "description": "本机 AI Agent 用量统计 CLI，支持 Claude Code、Codex、ZCode、DeepSeek Harness 和 Antigravity，兼容 ccusage 日报，单文件分发",
   "engines": {
     "node": ">=22.16.0"
   },

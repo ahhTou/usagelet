@@ -1,10 +1,10 @@
 // 采集与汇总：各来源 → 每个 agent 每天一行 → 按 ccusage 统一日报规则聚合。
-// 来源顺序固定为 claude、codex、zcode、dsh（前三个与 ccusage 的加载顺序一致），浮点费用的累加顺序随之确定。
+// 沿用 ccusage 的来源顺序，固定浮点费用的累加顺序。
 import { realpath, stat } from 'node:fs/promises';
 import { join, basename, relative, dirname } from 'node:path';
 import { homedir } from 'node:os';
 import { exists, walk } from './io.mjs';
-import { VERSION, AGENTS, BUCKETS } from './shared.mjs';
+import { VERSION, AGENTS, BUCKETS, normalizeAgent } from './shared.mjs';
 import { BASE_AGENTS, aliases } from './compat.mjs';
 import { PricingMap, SNAPSHOT } from './pricing.mjs';
 import { dayFormatter, summarizeDaily, agentRows } from './rows.mjs';
@@ -15,6 +15,7 @@ import { claude } from './adapters/claude.mjs';
 import { codex } from './adapters/codex.mjs';
 import { zcode } from './adapters/zcode.mjs';
 import { dsh, dshFiles } from './adapters/dsh.mjs';
+import { antigravity, antigravityFiles, antigravityRoots } from './adapters/antigravity/index.mjs';
 import { claude as extendedClaude } from './adapters/claude-extended.mjs';
 import { codex as extendedCodex } from './adapters/codex-extended.mjs';
 import { zcode as extendedZcode } from './adapters/zcode-extended.mjs';
@@ -25,7 +26,6 @@ const list = (raw) =>
     .split(',')
     .map((x) => x.trim())
     .filter(Boolean);
-const normalizeAgent = (agent) => (agent === 'deepseek' ? 'dsh' : agent);
 
 // 接受 YYYY-MM-DD 或 YYYYMMDD，统一成 YYYY-MM-DD；与 ccusage 的 --since / --until 写法一致。
 function dateOption(name, value) {
@@ -101,9 +101,11 @@ export async function collect(options = {}) {
   for (const a of requested)
     if (!AGENTS.includes(a)) throw Error(a === 'qoder' ? 'Qoder 已暂缓接入' : `未知来源 ${a}`);
   const selected = AGENTS.filter((a) => requested.includes(a));
-  const sourcesOption = Object.fromEntries(
-    Object.entries(options.sources ?? {}).map(([k, v]) => [normalizeAgent(k), v]),
-  );
+  const sourcesOption = new Map();
+  for (const [name, paths] of Object.entries(options.sources ?? {})) {
+    const agent = normalizeAgent(name);
+    sourcesOption.set(agent, [...(sourcesOption.get(agent) ?? []), ...paths]);
+  }
 
   const claudeRoots = env.CLAUDE_CONFIG_DIR
     ? list(env.CLAUDE_CONFIG_DIR).map((p) => (basename(p) === 'projects' ? p : join(p, 'projects')))
@@ -123,6 +125,7 @@ export async function collect(options = {}) {
   const dshHomes = env.DSH_HOME?.trim() ? list(env.DSH_HOME) : [join(home, '.dsh')];
   const defaults = {
     claude: claudeRoots,
+    antigravity: antigravityRoots(env.ANTIGRAVITY_DATA_DIR, home),
     codex: codexRoots,
     zcode: (env.ZCODE_HOME ? list(env.ZCODE_HOME) : [join(home, '.zcode')]).map((p) =>
       join(p, 'cli/db/db.sqlite'),
@@ -134,7 +137,7 @@ export async function collect(options = {}) {
     rowsByAgent = [],
     detectedAgents = [];
   for (const agent of selected) {
-    const explicit = sourcesOption[agent],
+    const explicit = sourcesOption.get(agent),
       paths = explicit ?? defaults[agent],
       found = [];
     for (const path of paths) {
@@ -150,12 +153,13 @@ export async function collect(options = {}) {
           );
         continue;
       }
-      found.push(await realpath(path));
+      found.push(agent === 'antigravity' ? path : await realpath(path));
     }
     const roots = [...new Set(found)];
     let files = [];
     if (agent === 'zcode') files = roots;
     else if (agent === 'dsh') files = await dshFiles(roots, ctx);
+    else if (agent === 'antigravity') files = await antigravityFiles(roots, ctx);
     else {
       const seenFiles = new Set(),
         relativeKeys = new Set();
@@ -189,7 +193,8 @@ export async function collect(options = {}) {
         rows = codexRows(ctx, events, { day, since, until, speed: await codexSpeed(codexHomes) });
       } else {
         let entries;
-        if (mode === 'ccusage') {
+        if (agent === 'antigravity') entries = await antigravity(files, ctx);
+        else if (mode === 'ccusage') {
           if (agent === 'claude') entries = await claude(files, ctx);
           else if (agent === 'zcode') entries = await zcode(files, ctx);
           else entries = await dsh(files, ctx);
@@ -238,6 +243,7 @@ export async function collect(options = {}) {
               ccusage: CCUSAGE_VERSION,
               agents: selected.filter((a) => BASE_AGENTS.includes(a)),
               dsh: selected.includes('dsh') ? 'deepseek-harness dsh-token-meter tokenUsage' : null,
+              ...(selected.includes('antigravity') && { antigravity: 'ccusage@4f1df4ed' }),
               pricing: `ccusage@${CCUSAGE_VERSION} 内置快照`,
             }
           : null,
